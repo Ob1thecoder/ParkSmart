@@ -1,20 +1,27 @@
+import json
 import logging
-import json as _json
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.db import init_db, get_connection
-from app.data.seed_car_parks import seed as seed_car_parks
 from app.data.kml_loader import parse_kml
+from app.data.seed_car_parks import seed as seed_car_parks
+from app.db import get_connection, init_db
+from app.scheduler import create_scheduler
+from app.services.occupancy_service import backfill_sim_history
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
+_scheduler = None
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global _scheduler
     log.info("Starting ParkSmart backend")
 
     # 1. Bootstrap database
@@ -26,7 +33,7 @@ async def lifespan(app: FastAPI):
     log.info("Car parks seeded")
 
     # 3. Parse KML (if file exists)
-    kml_path = settings.fixtures_dir.parent / "willoughby_parking.kml"
+    kml_path = Path(__file__).parent.parent.parent / "docs" / "willoughby_council_street_parking_signs_data.kml"
     if kml_path.exists():
         signs = parse_kml(kml_path, geocode=True)
         with get_connection(settings.db_path) as con:
@@ -39,11 +46,8 @@ async def lifespan(app: FastAPI):
                 [
                     (
                         s.raw_sign_id,
-                        s.lat,
-                        s.lon,
-                        s.street,
-                        s.raw_description,
-                        _json.dumps([e.model_dump() for e in s.signs]),
+                        s.lat, s.lon, s.street, s.raw_description,
+                        json.dumps([e.model_dump() for e in s.signs]),
                         s.sign_photo_url,
                     )
                     for s in signs
@@ -53,12 +57,37 @@ async def lifespan(app: FastAPI):
     else:
         log.warning("KML file not found at %s — skipping sign load", kml_path)
 
+    # 4. Backfill 90 days of simulated history (idempotent — INSERT OR IGNORE)
+    backfill_sim_history(settings.db_path, days=90)
+    log.info("Sim history backfill complete")
+
+    # 5. Start background scheduler
+    _scheduler = create_scheduler(settings.db_path, settings)
+    _scheduler.start()
+    log.info("Scheduler started")
+
     yield
 
+    if _scheduler and _scheduler.running:
+        _scheduler.shutdown(wait=False)
     log.info("Shutting down ParkSmart backend")
 
 
-app = FastAPI(title="ParkSmart API", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="ParkSmart API", version="0.2.0", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],    # restrict in production
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+from app.routers import occupancy, zones, predict, chat  # noqa: E402
+
+app.include_router(occupancy.router, prefix="/api")
+app.include_router(zones.router, prefix="/api")
+app.include_router(predict.router, prefix="/api")
+app.include_router(chat.router, prefix="/api")
 
 
 @app.get("/health")

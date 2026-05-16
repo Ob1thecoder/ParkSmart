@@ -106,14 +106,12 @@ def refresh_tfnsw(db_path: Path, settings: Settings) -> None:
     """Poll TfNSW full-list and upsert into occupancy_history. Called by scheduler."""
     from app.data.tfnsw_client import TfNSWClient
 
-    client = TfNSWClient(settings)
-    try:
-        snapshots = client.get_full_list(fixture_name="full_list")
-    except Exception as exc:
-        log.warning("TfNSW full-list failed: %s", exc)
-        return
-    finally:
-        client.close()
+    with TfNSWClient(settings) as client:
+        try:
+            snapshots = client.get_full_list(fixture_name="full_list")
+        except Exception as exc:
+            log.warning("TfNSW full-list failed: %s", exc)
+            return
 
     snap_by_fid = {s.facility_id: s for s in snapshots}
     with get_connection(db_path) as con:

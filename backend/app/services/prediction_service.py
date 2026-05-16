@@ -37,6 +37,8 @@ def predict_availability_tool(
         target_dt = target_dt.replace(tzinfo=timezone.utc)
 
     now = datetime.now(timezone.utc)
+    if target_dt < now:
+        return {"error": "out_of_range", "detail": "target_datetime must be in the future"}
     if target_dt > now + timedelta(days=_MAX_FUTURE_DAYS):
         return {
             "error": "out_of_range",
