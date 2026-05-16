@@ -150,3 +150,55 @@ def test_parse_kml_geocode_failure_does_not_crash(tmp_path):
     assert len(result) == 2
     for sign in result:
         assert sign.street is None
+
+
+def test_parse_kml_uses_geocode_cache(tmp_path, monkeypatch):
+    import json
+    kml = tmp_path / "test.kml"
+    kml.write_text(SAMPLE_KML)
+    cache = tmp_path / "geocode_cache.json"
+    cache.write_text(json.dumps({
+        "-33.797,151.181": "Victoria Avenue",
+        "-33.798,151.182": "Albert Avenue",
+    }))
+
+    def _boom(*args, **kwargs):
+        raise AssertionError("_geocode_one called despite a full cache")
+
+    monkeypatch.setattr("app.data.kml_loader._geocode_one", _boom)
+
+    result = parse_kml(kml, geocode=True, cache_path=cache)
+    assert result[0].street == "Victoria Avenue"
+    assert result[1].street == "Albert Avenue"
+
+
+def test_parse_kml_writes_geocode_cache(tmp_path, monkeypatch):
+    import json
+    kml = tmp_path / "test.kml"
+    kml.write_text(SAMPLE_KML)
+    cache = tmp_path / "geocode_cache.json"
+
+    monkeypatch.setattr(
+        "app.data.kml_loader._geocode_one", lambda client, lat, lon: f"Road {lat}"
+    )
+    monkeypatch.setattr("app.data.kml_loader.time.sleep", lambda s: None)
+
+    parse_kml(kml, geocode=True, cache_path=cache)
+    assert cache.exists()
+    saved = json.loads(cache.read_text())
+    assert saved["-33.797,151.181"] == "Road -33.797"
+    assert saved["-33.798,151.182"] == "Road -33.798"
+
+
+def test_parse_kml_does_not_cache_failed_geocode(tmp_path, monkeypatch):
+    import json
+    kml = tmp_path / "test.kml"
+    kml.write_text(SAMPLE_KML)
+    cache = tmp_path / "geocode_cache.json"
+
+    monkeypatch.setattr("app.data.kml_loader._geocode_one", lambda client, lat, lon: None)
+    monkeypatch.setattr("app.data.kml_loader.time.sleep", lambda s: None)
+
+    parse_kml(kml, geocode=True, cache_path=cache)
+    # No successful lookups → nothing written, so failures retry next run.
+    assert not cache.exists()

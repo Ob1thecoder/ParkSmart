@@ -34,8 +34,9 @@ async def lifespan(app: FastAPI):
 
     # 3. Parse KML (if file exists)
     kml_path = Path(__file__).parent.parent.parent / "docs" / "willoughby_council_street_parking_signs_data.kml"
+    geocode_cache = Path(__file__).parent / "data" / "geocode_cache.json"
     if kml_path.exists():
-        signs = parse_kml(kml_path, geocode=False)  # DISABLED: Takes 20min with geocode=True
+        signs = parse_kml(kml_path, geocode=True, cache_path=geocode_cache)
         with get_connection(settings.db_path) as con:
             con.executemany(
                 """

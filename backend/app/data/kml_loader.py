@@ -1,3 +1,4 @@
+import json
 import re
 import logging
 import time
@@ -16,7 +17,9 @@ _NOMINATIM_URL = "https://nominatim.openstreetmap.org/reverse"
 _USER_AGENT = "ParkSmart/1.0 (parking assistant for Chatswood CBD; contact duyminhle21@gmail.com)"
 
 
-def parse_kml(kml_path: Path, *, geocode: bool = True) -> list[ParkingSignRecord]:
+def parse_kml(
+    kml_path: Path, *, geocode: bool = True, cache_path: Path | None = None
+) -> list[ParkingSignRecord]:
     tree = etree.parse(str(kml_path))
     root = tree.getroot()
 
@@ -68,7 +71,7 @@ def parse_kml(kml_path: Path, *, geocode: bool = True) -> list[ParkingSignRecord
     log.info("Parsed %d signs from %s", len(records), kml_path.name)
 
     if geocode and records:
-        _reverse_geocode_all(records)
+        _reverse_geocode_all(records, cache_path)
 
     return records
 
@@ -84,12 +87,34 @@ def _parse_fields(html: str) -> dict[str, str]:
     return result
 
 
-def _reverse_geocode_all(records: list[ParkingSignRecord]) -> None:
+def _reverse_geocode_all(
+    records: list[ParkingSignRecord], cache_path: Path | None
+) -> None:
+    """Resolve street names. A JSON cache at `cache_path` lets later runs skip
+    the Nominatim calls — only cache misses hit the network."""
+    cache: dict[str, str] = {}
+    if cache_path and cache_path.exists():
+        cache = json.loads(cache_path.read_text())
+
+    dirty = False
     with httpx.Client(headers={"User-Agent": _USER_AGENT}, timeout=10.0) as client:
         for record in records:
+            key = f"{record.lat},{record.lon}"
+            if key in cache:
+                record.street = cache[key]
+                continue
+
             street = _geocode_one(client, record.lat, record.lon)
             record.street = street
+            if street is not None:
+                cache[key] = street
+                dirty = True
             time.sleep(1.0)  # Nominatim rate limit: 1 req/s
+
+    if cache_path and dirty:
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(json.dumps(cache, indent=2, sort_keys=True))
+        log.info("Geocode cache updated (%d entries) at %s", len(cache), cache_path)
 
 
 def _geocode_one(client: httpx.Client, lat: float, lon: float) -> str | None:
