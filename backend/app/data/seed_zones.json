@@ -1,0 +1,49 @@
+{
+  "victoria_avenue": {
+    "street": "Victoria Avenue",
+    "segments": [
+      {
+        "side": "north",
+        "rules_plain_english": "No stopping 7am–10am and 4pm–7pm Monday to Friday. 2P parking 10am–4pm Monday to Friday. No restrictions on weekends.",
+        "rules_structured": [
+          {
+            "days": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+            "start": "07:00",
+            "end": "10:00",
+            "max_minutes": null,
+            "type": "no_stopping"
+          },
+          {
+            "days": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+            "start": "16:00",
+            "end": "19:00",
+            "max_minutes": null,
+            "type": "no_stopping"
+          },
+          {
+            "days": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+            "start": "10:00",
+            "end": "16:00",
+            "max_minutes": 120,
+            "type": "timed"
+          }
+        ],
+        "sign_photo_url": null
+      },
+      {
+        "side": "south",
+        "rules_plain_english": "No stopping at any time.",
+        "rules_structured": [
+          {
+            "days": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+            "start": "00:00",
+            "end": "23:59",
+            "max_minutes": null,
+            "type": "no_stopping"
+          }
+        ],
+        "sign_photo_url": null
+      }
+    ]
+  }
+}

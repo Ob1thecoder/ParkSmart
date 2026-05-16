@@ -1,0 +1,186 @@
+basePath: /v1
+consumes:
+- '*/*'
+definitions:
+    ErrorDetails:
+        description: Error response
+        example:
+            ErrorDetails:
+                ErrorDateTime: XXXXXXXXXX
+                Message: XXXXXXXXXX
+                RequestedMethod: XXXXXXXXXX
+                RequestedUrl: XXXXXXXXXX
+                TransactionId: XXXXXXXXXX
+        properties:
+            ErrorDateTime:
+                type: string
+            Message:
+                type: string
+            RequestedMethod:
+                type: string
+            RequestedUrl:
+                type: string
+            TransactionId:
+                type: string
+        required:
+        - TransactionId
+        - ErrorDateTime
+        - Message
+        - RequestedUrl
+        - RequestedMethod
+        type: object
+host: api.transport.nsw.gov.au
+info:
+    title: Car park API
+    version: '1.0'
+paths:
+    /carpark:
+        get:
+            consumes: []
+            description: Returns occupancy details of a car park based on a facility
+                ID.
+            operationId: GetCarPark
+            parameters:
+            -   default: ''
+                description: 'The facility ID you wish to get data from. Note: If
+                    not specified, a list of facility names with their ID will be
+                    returned.'
+                in: query
+                name: facility
+                required: false
+                type: string
+            produces:
+            - application/json
+            responses:
+                '200':
+                    description: The request has been processed successfully.
+                    examples: {}
+                    schema:
+                        type: file
+                '401':
+                    description: The application calling the API has not been authenticated.
+                    examples: {}
+                    schema:
+                        $ref: '#/definitions/ErrorDetails'
+                '404':
+                    description: The requested resource could not be found.
+                    examples: {}
+                    schema:
+                        $ref: '#/definitions/ErrorDetails'
+                '500':
+                    description: An internal error has occurred.
+                    examples: {}
+                    schema:
+                        $ref: '#/definitions/ErrorDetails'
+                '503':
+                    description: The server is currently unavailable.
+                    examples: {}
+                    schema:
+                        $ref: '#/definitions/ErrorDetails'
+            summary: Parking spaces
+            tags:
+            - carpark
+    /carpark/full-list:
+        get:
+            consumes: []
+            description: 'Returns occupancy details of all the car parks.'
+            operationId: GetCarParkFull-list
+            produces:
+            - application/json
+            responses:
+                '200':
+                    description: The request has been processed successfully.
+                    examples: {}
+                    schema:
+                        type: file
+                '401':
+                    description: The application calling the API has not been authenticated.
+                    examples: {}
+                    schema:
+                        $ref: '#/definitions/ErrorDetails'
+                '404':
+                    description: The requested resource could not be found.
+                    examples: {}
+                    schema:
+                        $ref: '#/definitions/ErrorDetails'
+                '500':
+                    description: An internal error has occurred.
+                    examples: {}
+                    schema:
+                        $ref: '#/definitions/ErrorDetails'
+                '503':
+                    description: The server is currently unavailable.
+                    examples: {}
+                    schema:
+                        $ref: '#/definitions/ErrorDetails'
+            summary: Full list of Parking spaces
+            tags:
+            - carpark-full-list
+    /carpark/history:
+        get:
+            consumes: []
+            description: 'Returns historical occupancy details of a car park based
+                on a facility ID
+
+                and event date'
+            operationId: GetCarParkHistory
+            parameters:
+            -   default: ''
+                description: The facility ID you wish to get data from.
+                in: query
+                name: facility
+                required: true
+                type: string
+            -   default: ''
+                description: 'The event date you wish to get data from. Format: YYYY-MM-DD
+                    ex: 2019-11-14'
+                in: query
+                name: eventdate
+                required: true
+                type: string
+            produces:
+            - application/json
+            responses:
+                '200':
+                    description: The request has been processed successfully.
+                    examples: {}
+                    schema:
+                        type: file
+                '401':
+                    description: The application calling the API has not been authenticated.
+                    examples: {}
+                    schema:
+                        $ref: '#/definitions/ErrorDetails'
+                '404':
+                    description: The requested resource could not be found.
+                    examples: {}
+                    schema:
+                        $ref: '#/definitions/ErrorDetails'
+                '500':
+                    description: An internal error has occurred.
+                    examples: {}
+                    schema:
+                        $ref: '#/definitions/ErrorDetails'
+                '503':
+                    description: The server is currently unavailable.
+                    examples: {}
+                    schema:
+                        $ref: '#/definitions/ErrorDetails'
+            summary: Parking spaces history
+            tags:
+            - carparkhistory
+produces:
+- application/json
+schemes:
+- https
+security:
+-   APIKey: []
+securityDefinitions:
+    APIKey:
+        description: 'Expected Format: apikey [TOKEN]'
+        in: header
+        name: Authorization
+        type: apiKey
+swagger: '2.0'
+tags:
+-   name: carpark

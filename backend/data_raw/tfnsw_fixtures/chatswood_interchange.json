@@ -1,0 +1,38 @@
+{
+  "tsn": "207210",
+  "time": "785808515",
+  "spots": "213",
+  "zones": [
+    {
+      "spots": "213",
+      "zone_id": "1",
+      "occupancy": {
+        "loop": "1423",
+        "total": "178",
+        "monthlies": null,
+        "open_gate": null,
+        "transients": null
+      },
+      "zone_name": "Gordon Henry St (north)",
+      "parent_zone_id": "0"
+    }
+  ],
+  "ParkID": "6",
+  "location": {
+    "suburb": "Gordon",
+    "address": "Henry Street",
+    "latitude": "-33.756009",
+    "longitude": "151.154528"
+  },
+  "occupancy": {
+    "loop": "1423",
+    "total": "178",
+    "monthlies": null,
+    "open_gate": null,
+    "transients": null
+  },
+  "MessageDate": "2026-05-11T10:30:00",
+  "facility_id": "6",
+  "facility_name": "Park&Ride - Gordon Henry St (north)",
+  "tfnsw_facility_id": "207210TPR001"
+}

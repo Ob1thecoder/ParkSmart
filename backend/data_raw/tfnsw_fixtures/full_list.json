@@ -1,0 +1,50 @@
+[
+  {
+    "tsn": "207210",
+    "time": "785808515",
+    "spots": "213",
+    "zones": [],
+    "ParkID": "6",
+    "location": {
+      "suburb": "Gordon",
+      "address": "Henry Street",
+      "latitude": "-33.756009",
+      "longitude": "151.154528"
+    },
+    "occupancy": {
+      "loop": "1423",
+      "total": "178",
+      "monthlies": null,
+      "open_gate": null,
+      "transients": null
+    },
+    "MessageDate": "2026-05-11T10:30:00",
+    "facility_id": "6",
+    "facility_name": "Park&Ride - Gordon Henry St (north)",
+    "tfnsw_facility_id": "207210TPR001"
+  },
+  {
+    "tsn": "207010",
+    "time": "785808515",
+    "spots": "94",
+    "zones": [],
+    "ParkID": "34",
+    "location": {
+      "suburb": "Lindfield",
+      "address": "Village Green",
+      "latitude": "-33.775185",
+      "longitude": "151.169111"
+    },
+    "occupancy": {
+      "loop": "312",
+      "total": "61",
+      "monthlies": null,
+      "open_gate": null,
+      "transients": null
+    },
+    "MessageDate": "2026-05-11T10:30:00",
+    "facility_id": "34",
+    "facility_name": "Park&Ride - Lindfield Village Green",
+    "tfnsw_facility_id": "207010TPR001"
+  }
+]

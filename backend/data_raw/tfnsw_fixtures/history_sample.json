@@ -1,0 +1,29 @@
+[
+  {
+    "tsn": "207210",
+    "spots": "213",
+    "occupancy": { "loop": "27",  "total": "27",  "monthlies": null, "open_gate": null, "transients": null },
+    "MessageDate": "2026-05-10T06:00:00",
+    "facility_id": "6",
+    "facility_name": "Park&Ride - Gordon Henry St (north)",
+    "tfnsw_facility_id": "207210TPR001"
+  },
+  {
+    "tsn": "207210",
+    "spots": "213",
+    "occupancy": { "loop": "198", "total": "198", "monthlies": null, "open_gate": null, "transients": null },
+    "MessageDate": "2026-05-10T09:00:00",
+    "facility_id": "6",
+    "facility_name": "Park&Ride - Gordon Henry St (north)",
+    "tfnsw_facility_id": "207210TPR001"
+  },
+  {
+    "tsn": "207210",
+    "spots": "213",
+    "occupancy": { "loop": "145", "total": "145", "monthlies": null, "open_gate": null, "transients": null },
+    "MessageDate": "2026-05-10T17:00:00",
+    "facility_id": "6",
+    "facility_name": "Park&Ride - Gordon Henry St (north)",
+    "tfnsw_facility_id": "207210TPR001"
+  }
+]

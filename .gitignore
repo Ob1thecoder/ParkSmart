@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+.coverage
+
+# Environment — never commit secrets
+.env
+
+# SQLite database
+backend/parksmart.db
+
+# ML model artefacts (large binaries — regenerate via scripts/train_model.py)
+backend/models/*.pkl
+
+# Raw data files placed in data_raw by the developer
+# (tfnsw_fixtures/ is committed — it holds mock fixtures, not real data)
+backend/data_raw/*.csv
+backend/data_raw/*.kml
+backend/data_raw/*.xlsx
+backend/data_raw/*.json
+!backend/data_raw/tfnsw_fixtures/
+!backend/data_raw/tfnsw_fixtures/*.json
+!backend/data_raw/.gitkeep
+
+# Node.js
+node_modules/
+frontend/dist/
+frontend/.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+CLAUDE.md
+.cursorrules
