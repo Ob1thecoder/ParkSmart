@@ -7,28 +7,34 @@ from app.services import llm_service
 
 
 def _make_settings(seeded_db: Path) -> Settings:
-    return Settings(db_path=seeded_db, anthropic_api_key="test-key")
+    return Settings(db_path=seeded_db, openai_api_key="test-key")
 
 
 def _text_response(text: str) -> MagicMock:
-    block = MagicMock()
-    block.type = "text"
-    block.text = text
+    message = MagicMock()
+    message.content = text
+    message.tool_calls = None
+    choice = MagicMock()
+    choice.message = message
+    choice.finish_reason = "stop"
     resp = MagicMock()
-    resp.content = [block]
-    resp.stop_reason = "end_turn"
+    resp.choices = [choice]
     return resp
 
 
-def _tool_response(name: str, inputs: dict, tool_id: str = "toolu_01") -> MagicMock:
-    block = MagicMock()
-    block.type = "tool_use"
-    block.name = name
-    block.input = inputs
-    block.id = tool_id
+def _tool_response(name: str, inputs: dict, tool_id: str = "call_01") -> MagicMock:
+    tc = MagicMock()
+    tc.id = tool_id
+    tc.function.name = name
+    tc.function.arguments = json.dumps(inputs)
+    message = MagicMock()
+    message.content = None
+    message.tool_calls = [tc]
+    choice = MagicMock()
+    choice.message = message
+    choice.finish_reason = "tool_calls"
     resp = MagicMock()
-    resp.content = [block]
-    resp.stop_reason = "tool_use"
+    resp.choices = [choice]
     return resp
 
 
@@ -76,9 +82,9 @@ async def test_chat_stream_no_tool_call(seeded_db):
     settings = _make_settings(seeded_db)
     mock_resp = _text_response("Westfield has 392 spots available.")
 
-    with patch("app.services.llm_service.anthropic.AsyncAnthropic") as MockAnth:
-        instance = MockAnth.return_value
-        instance.messages.create = AsyncMock(return_value=mock_resp)
+    with patch("app.services.llm_service.openai.AsyncOpenAI") as MockOAI:
+        instance = MockOAI.return_value
+        instance.chat.completions.create = AsyncMock(return_value=mock_resp)
 
         chunks = []
         async for chunk in llm_service.chat_stream("Where to park?", [], seeded_db, settings):
@@ -95,9 +101,9 @@ async def test_chat_stream_one_tool_call_then_text(seeded_db):
     tool_resp = _tool_response("get_live_occupancy", {"location": "Westfield"})
     text_resp = _text_response("Westfield is 72% full.")
 
-    with patch("app.services.llm_service.anthropic.AsyncAnthropic") as MockAnth:
-        instance = MockAnth.return_value
-        instance.messages.create = AsyncMock(side_effect=[tool_resp, text_resp])
+    with patch("app.services.llm_service.openai.AsyncOpenAI") as MockOAI:
+        instance = MockOAI.return_value
+        instance.chat.completions.create = AsyncMock(side_effect=[tool_resp, text_resp])
 
         chunks = []
         async for chunk in llm_service.chat_stream("Where to park?", [], seeded_db, settings):
@@ -115,9 +121,9 @@ async def test_chat_stream_stops_after_max_iterations(seeded_db):
     settings = _make_settings(seeded_db)
     always_tool = _tool_response("get_live_occupancy", {"location": "Westfield"})
 
-    with patch("app.services.llm_service.anthropic.AsyncAnthropic") as MockAnth:
-        instance = MockAnth.return_value
-        instance.messages.create = AsyncMock(return_value=always_tool)
+    with patch("app.services.llm_service.openai.AsyncOpenAI") as MockOAI:
+        instance = MockOAI.return_value
+        instance.chat.completions.create = AsyncMock(return_value=always_tool)
 
         chunks = []
         async for chunk in llm_service.chat_stream("Hello", [], seeded_db, settings):

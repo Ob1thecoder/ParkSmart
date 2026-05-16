@@ -4,7 +4,7 @@ from pathlib import Path
 
 class Settings(BaseSettings):
     tfnsw_api_key: str = ""
-    anthropic_api_key: str = ""
+    openai_api_key: str = ""
     db_path: Path = Path("parksmart.db")
     fixtures_dir: Path = Path("data_raw/tfnsw_fixtures")
 

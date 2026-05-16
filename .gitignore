@@ -37,3 +37,5 @@ Thumbs.db
 
 CLAUDE.md
 .cursorrules
+*.postman_collection.json
+POSTMAN_SETUP.md

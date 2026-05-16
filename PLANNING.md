@@ -33,7 +33,7 @@ Plan files: `docs/superpowers/plans/`
 | Live data | All 5 Chatswood CBD car parks are `source=simulated` (not in TfNSW feed). Real TfNSW: Gordon (`facility_id="6"`) + Lindfield (`facility_id="34"`). |
 | ML training | Real TfNSW history for Gordon and Lindfield only. No synthetic data in the training set. |
 | Prediction | 7-day horizon, hourly resolution. Simulated car parks use the estimation model; TfNSW parks use XGBoost (Plan 3+). |
-| LLM | `claude-haiku-4-5-20251001` |
+| LLM | `gpt-4o-mini` (OpenAI) |
 | UI | Single page: full-bleed Leaflet map + 380px right chat drawer |
 | Transparency | `source: "simulated"` propagates through every layer. LLM labels estimates as "estimated". Frontend shows a visual badge. |
 
@@ -59,7 +59,7 @@ Plan files: `docs/superpowers/plans/`
 
 - **Backend:** Python 3.11+, FastAPI, SQLite (stdlib sqlite3), httpx, APScheduler 3.x
 - **ML:** pandas, scikit-learn, XGBoost
-- **LLM:** `anthropic.AsyncAnthropic`, claude-haiku-4-5-20251001, tool-calling pattern
+- **LLM:** `openai.AsyncOpenAI`, gpt-4o-mini, tool-calling pattern
 - **Frontend:** React (Vite), Leaflet.js, Tailwind CSS, TypeScript
 - **KML:** lxml
 

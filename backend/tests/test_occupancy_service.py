@@ -8,7 +8,7 @@ from app.db import get_connection
 
 
 def _make_settings(seeded_db: Path) -> Settings:
-    return Settings(db_path=seeded_db, tfnsw_api_key="", anthropic_api_key="")
+    return Settings(db_path=seeded_db, tfnsw_api_key="", openai_api_key="")
 
 
 # --- get_all_occupancy ---

@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import AsyncIterator
 
-import anthropic
+import openai
 
 from app.config import Settings
 from app.services import occupancy_service, prediction_service, zone_service
@@ -12,7 +12,7 @@ from app.services import occupancy_service, prediction_service, zone_service
 log = logging.getLogger(__name__)
 
 MAX_TOOL_ITERATIONS = 5
-_MODEL = "claude-haiku-4-5-20251001"
+_MODEL = "gpt-4o-mini"
 
 SYSTEM_PROMPT = """\
 You are ParkSmart, a helpful parking assistant for Chatswood CBD, Sydney, Australia.
@@ -33,59 +33,68 @@ Behaviour rules:
 
 TOOLS: list[dict] = [
     {
-        "name": "get_live_occupancy",
-        "description": (
-            "Get current parking occupancy for a car park in Chatswood CBD. "
-            "Returns occupancy percentage, available spots, and whether the data is "
-            "live (from TfNSW sensors) or estimated."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "location": {
-                    "type": "string",
-                    "description": "Car park name or nearby landmark (e.g. 'Westfield', 'Mandarin Centre', 'Victoria Avenue')",
-                }
+        "type": "function",
+        "function": {
+            "name": "get_live_occupancy",
+            "description": (
+                "Get current parking occupancy for a car park in Chatswood CBD. "
+                "Returns occupancy percentage, available spots, and whether the data is "
+                "live (from TfNSW sensors) or estimated."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "location": {
+                        "type": "string",
+                        "description": "Car park name or nearby landmark (e.g. 'Westfield', 'Mandarin Centre', 'Victoria Avenue')",
+                    }
+                },
+                "required": ["location"],
             },
-            "required": ["location"],
         },
     },
     {
-        "name": "predict_availability",
-        "description": (
-            "Predict parking availability at a specific future time (up to 7 days ahead). "
-            "Use this only when the user mentions a future time, not for current conditions."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "location": {
-                    "type": "string",
-                    "description": "Car park name or nearby landmark in Chatswood",
+        "type": "function",
+        "function": {
+            "name": "predict_availability",
+            "description": (
+                "Predict parking availability at a specific future time (up to 7 days ahead). "
+                "Use this only when the user mentions a future time, not for current conditions."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "location": {
+                        "type": "string",
+                        "description": "Car park name or nearby landmark in Chatswood",
+                    },
+                    "target_datetime": {
+                        "type": "string",
+                        "description": "ISO 8601 datetime string, e.g. '2026-05-15T18:00:00'. Must be within 7 days.",
+                    },
                 },
-                "target_datetime": {
-                    "type": "string",
-                    "description": "ISO 8601 datetime string, e.g. '2026-05-15T18:00:00'. Must be within 7 days.",
-                },
+                "required": ["location", "target_datetime"],
             },
-            "required": ["location", "target_datetime"],
         },
     },
     {
-        "name": "get_zone_restrictions",
-        "description": (
-            "Get street parking time restrictions for a street in Chatswood CBD. "
-            "Returns no-stopping zones, timed parking limits, and permit areas."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "street": {
-                    "type": "string",
-                    "description": "Street name in Chatswood CBD, e.g. 'Victoria Avenue', 'Albert Avenue'",
-                }
+        "type": "function",
+        "function": {
+            "name": "get_zone_restrictions",
+            "description": (
+                "Get street parking time restrictions for a street in Chatswood CBD. "
+                "Returns no-stopping zones, timed parking limits, and permit areas."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "street": {
+                        "type": "string",
+                        "description": "Street name in Chatswood CBD, e.g. 'Victoria Avenue', 'Albert Avenue'",
+                    }
+                },
+                "required": ["street"],
             },
-            "required": ["street"],
         },
     },
 ]
@@ -124,44 +133,50 @@ async def chat_stream(
       {"type": "tool_result", "tool": str, "result": dict}
       {"type": "done"}
     """
-    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-    messages = list(history) + [{"role": "user", "content": message}]
+    client = openai.AsyncOpenAI(api_key=settings.openai_api_key)
     system = SYSTEM_PROMPT.format(date=datetime.now(timezone.utc).strftime("%Y-%m-%d"))
+    messages = (
+        [{"role": "system", "content": system}]
+        + list(history)
+        + [{"role": "user", "content": message}]
+    )
 
     for _ in range(MAX_TOOL_ITERATIONS):
-        response = await client.messages.create(
+        response = await client.chat.completions.create(
             model=_MODEL,
             max_tokens=1024,
-            system=system,
-            tools=TOOLS,
             messages=messages,
+            tools=TOOLS,
         )
 
-        for block in response.content:
-            if block.type == "text":
-                yield json.dumps({"type": "text", "content": block.text})
+        choice = response.choices[0]
 
-        if response.stop_reason != "tool_use":
+        if choice.message.content:
+            yield json.dumps({"type": "text", "content": choice.message.content})
+
+        if choice.finish_reason != "tool_calls":
             break
 
-        tool_results = []
-        for block in response.content:
-            if block.type != "tool_use":
-                continue
-            yield json.dumps({"type": "tool_call", "tool": block.name, "input": block.input})
-            result = _dispatch_tool(block.name, block.input, db_path, settings)
-            yield json.dumps({"type": "tool_result", "tool": block.name, "result": result})
-            tool_results.append(
+        tool_calls = choice.message.tool_calls or []
+        assistant_msg = {
+            "role": "assistant",
+            "content": choice.message.content or "",
+            "tool_calls": [
                 {
-                    "type": "tool_result",
-                    "tool_use_id": block.id,
-                    "content": json.dumps(result),
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {"name": tc.function.name, "arguments": tc.function.arguments},
                 }
-            )
+                for tc in tool_calls
+            ],
+        }
+        messages.append(assistant_msg)
 
-        messages = messages + [
-            {"role": "assistant", "content": response.content},
-            {"role": "user", "content": tool_results},
-        ]
+        for tc in tool_calls:
+            inputs = json.loads(tc.function.arguments)
+            yield json.dumps({"type": "tool_call", "tool": tc.function.name, "input": inputs})
+            result = _dispatch_tool(tc.function.name, inputs, db_path, settings)
+            yield json.dumps({"type": "tool_result", "tool": tc.function.name, "result": result})
+            messages.append({"role": "tool", "tool_call_id": tc.id, "content": json.dumps(result)})
 
     yield json.dumps({"type": "done"})

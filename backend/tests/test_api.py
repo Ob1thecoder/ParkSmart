@@ -13,7 +13,7 @@ def test_settings(seeded_db: Path) -> Settings:
     return Settings(
         db_path=seeded_db,
         tfnsw_api_key="",
-        anthropic_api_key="test",
+        openai_api_key="test",
         fixtures_dir=Path("data_raw/tfnsw_fixtures"),
     )
 
