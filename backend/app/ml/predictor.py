@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from app.config import settings
 from app.data.seed_car_parks import ALL_CAR_PARKS
 from app.db import get_connection
 from app.ml.features import build_feature_row
@@ -34,14 +35,22 @@ def _lag_occupancy(
     lo = (when - timedelta(minutes=90)).isoformat()
     hi = (when + timedelta(minutes=90)).isoformat()
     with get_connection(db_path) as con:
-        row = con.execute(
-            "SELECT available, total_spots FROM occupancy_history "
-            "WHERE car_park_id = ? AND ts BETWEEN ? AND ? "
-            "ORDER BY ABS(julianday(ts) - julianday(?)) LIMIT 1",
-            (car_park_id, lo, hi, when.isoformat()),
-        ).fetchone()
-    if row and row["total_spots"]:
-        return 1.0 - row["available"] / row["total_spots"]
+        rows = con.execute(
+            "SELECT ts, available, total_spots FROM occupancy_history "
+            "WHERE car_park_id = ? AND ts BETWEEN ? AND ? ",
+            (car_park_id, lo, hi),
+        ).fetchall()
+
+    if not rows:
+        return fallback
+
+    when_ts = when.timestamp()
+    best_row = min(
+        rows,
+        key=lambda r: abs(datetime.fromisoformat(r["ts"]).timestamp() - when_ts)
+    )
+    if best_row["total_spots"]:
+        return 1.0 - best_row["available"] / best_row["total_spots"]
     return fallback
 
 
