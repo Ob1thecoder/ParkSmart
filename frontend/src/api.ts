@@ -6,6 +6,8 @@ import type {
   ZoneResponse,
 } from "./types";
 
+const API_BASE = import.meta.env.VITE_API_URL || "";
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -25,7 +27,7 @@ async function parseJson<T>(res: Response): Promise<T> {
 }
 
 export async function getOccupancy(): Promise<OccupancyResponse[]> {
-  const res = await fetch("/api/occupancy");
+  const res = await fetch(`${API_BASE}/api/occupancy`);
   return parseJson<OccupancyResponse[]>(res);
 }
 
@@ -37,18 +39,18 @@ export async function getPredict(
     location,
     target_datetime: targetDatetimeIso,
   });
-  const res = await fetch(`/api/predict?${params}`);
+  const res = await fetch(`${API_BASE}/api/predict?${params}`);
   return parseJson<PredictionResult>(res);
 }
 
 export async function getZones(street: string): Promise<ZoneResponse> {
   const params = new URLSearchParams({ street });
-  const res = await fetch(`/api/zones?${params}`);
+  const res = await fetch(`${API_BASE}/api/zones?${params}`);
   return parseJson<ZoneResponse>(res);
 }
 
 export async function getStreets(): Promise<string[]> {
-  const res = await fetch("/api/zones/streets");
+  const res = await fetch(`${API_BASE}/api/zones/streets`);
   return parseJson<string[]>(res);
 }
 
@@ -56,7 +58,7 @@ export async function postChatStream(
   body: ChatRequest,
   onEvent: (ev: ChatStreamEvent) => void,
 ): Promise<void> {
-  const res = await fetch("/api/chat", {
+  const res = await fetch(`${API_BASE}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
