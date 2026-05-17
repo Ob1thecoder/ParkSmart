@@ -59,6 +59,7 @@ export type ChatStreamEvent =
   | { type: "text"; content: string }
   | { type: "tool_call"; tool: string; input: Record<string, unknown> }
   | { type: "tool_result"; tool: string; result: Record<string, unknown> }
+  | { type: "error"; message: string }
   | { type: "done" };
 
 export type MarkerData = {
@@ -73,4 +74,21 @@ export type MarkerData = {
   modelVersion?: string;
   /** When predict API failed for this park in predicted mode */
   predictionMissing?: boolean;
+  /** Map markers still show live % while parallel predict calls are in flight */
+  predictionPending?: boolean;
+  /** From last occupancy snapshot — for detail bar */
+  capacity?: number;
+  occupied?: number;
+  available?: number;
+  /** ISO datetime string for predictions */
+  targetDatetime?: string;
 };
+
+export type ToolName = "get_live_occupancy" | "predict_availability" | "get_zone_restrictions";
+
+export interface ToolCardConfig {
+  label: string;
+  color: string;
+  bgTint: string;
+  borderColor: string;
+}

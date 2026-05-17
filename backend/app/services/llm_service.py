@@ -131,8 +131,14 @@ async def chat_stream(
       {"type": "text",        "content": str}
       {"type": "tool_call",   "tool": str, "input": dict}
       {"type": "tool_result", "tool": str, "result": dict}
+      {"type": "error",       "message": str}
       {"type": "done"}
     """
+    if not settings.openai_api_key:
+        yield json.dumps({"type": "error", "message": "OpenAI API key not configured on server."})
+        yield json.dumps({"type": "done"})
+        return
+
     client = openai.AsyncOpenAI(api_key=settings.openai_api_key)
     system = SYSTEM_PROMPT.format(date=datetime.now(timezone.utc).strftime("%Y-%m-%d"))
     messages = (
@@ -141,42 +147,56 @@ async def chat_stream(
         + [{"role": "user", "content": message}]
     )
 
-    for _ in range(MAX_TOOL_ITERATIONS):
-        response = await client.chat.completions.create(
-            model=_MODEL,
-            max_tokens=1024,
-            messages=messages,
-            tools=TOOLS,
-        )
+    try:
+        for _ in range(MAX_TOOL_ITERATIONS):
+            response = await client.chat.completions.create(
+                model=_MODEL,
+                max_tokens=1024,
+                messages=messages,
+                tools=TOOLS,
+            )
 
-        choice = response.choices[0]
+            choice = response.choices[0]
 
-        if choice.message.content:
-            yield json.dumps({"type": "text", "content": choice.message.content})
+            if choice.message.content:
+                yield json.dumps({"type": "text", "content": choice.message.content})
 
-        if choice.finish_reason != "tool_calls":
-            break
+            if choice.finish_reason != "tool_calls":
+                break
 
-        tool_calls = choice.message.tool_calls or []
-        assistant_msg = {
-            "role": "assistant",
-            "content": choice.message.content or "",
-            "tool_calls": [
-                {
-                    "id": tc.id,
-                    "type": "function",
-                    "function": {"name": tc.function.name, "arguments": tc.function.arguments},
-                }
-                for tc in tool_calls
-            ],
-        }
-        messages.append(assistant_msg)
+            tool_calls = choice.message.tool_calls or []
+            assistant_msg = {
+                "role": "assistant",
+                "content": choice.message.content or "",
+                "tool_calls": [
+                    {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+                    }
+                    for tc in tool_calls
+                ],
+            }
+            messages.append(assistant_msg)
 
-        for tc in tool_calls:
-            inputs = json.loads(tc.function.arguments)
-            yield json.dumps({"type": "tool_call", "tool": tc.function.name, "input": inputs})
-            result = _dispatch_tool(tc.function.name, inputs, db_path, settings)
-            yield json.dumps({"type": "tool_result", "tool": tc.function.name, "result": result})
-            messages.append({"role": "tool", "tool_call_id": tc.id, "content": json.dumps(result)})
+            for tc in tool_calls:
+                inputs = json.loads(tc.function.arguments)
+                yield json.dumps({"type": "tool_call", "tool": tc.function.name, "input": inputs})
+                result = _dispatch_tool(tc.function.name, inputs, db_path, settings)
+                yield json.dumps({"type": "tool_result", "tool": tc.function.name, "result": result})
+                messages.append({"role": "tool", "tool_call_id": tc.id, "content": json.dumps(result)})
+
+    except openai.RateLimitError as e:
+        log.error("OpenAI rate limit error: %s", e)
+        yield json.dumps({"type": "error", "message": "OpenAI quota exceeded. Please check your billing."})
+    except openai.AuthenticationError as e:
+        log.error("OpenAI auth error: %s", e)
+        yield json.dumps({"type": "error", "message": "Invalid OpenAI API key."})
+    except openai.APIError as e:
+        log.error("OpenAI API error: %s", e)
+        yield json.dumps({"type": "error", "message": f"OpenAI error: {e.message}"})
+    except Exception as e:
+        log.exception("Unexpected error in chat_stream")
+        yield json.dumps({"type": "error", "message": f"Unexpected error: {str(e)}"})
 
     yield json.dumps({"type": "done"})

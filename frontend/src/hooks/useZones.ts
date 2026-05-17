@@ -36,5 +36,13 @@ export function useZones() {
     }
   }, []);
 
-  return { zone, notFound, loadError, loading, streetQuery, load };
+  const clear = useCallback(() => {
+    setZone(null);
+    setNotFound(false);
+    setLoadError(null);
+    setStreetQuery("");
+    setLoading(false);
+  }, []);
+
+  return { zone, notFound, loadError, loading, streetQuery, load, clear };
 }

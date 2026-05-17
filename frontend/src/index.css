@@ -27,6 +27,7 @@ body {
   padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
 }
 
+/* Skeleton loading pulse */
 @keyframes skeleton-pulse {
   0%,
   100% {
@@ -37,4 +38,120 @@ body {
     opacity: 1;
     transform: scale(1);
   }
+}
+
+/* Map marker pending state */
+@keyframes marker-pending-pulse {
+  0%,
+  100% {
+    transform: scale(0.94);
+    opacity: 0.85;
+  }
+  50% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Streaming typing dots */
+@keyframes dot-jump {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+  50% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+/* Status dot pulse in header */
+@keyframes live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(0.8);
+  }
+}
+
+/* Live data pulse ring */
+@keyframes ps-live-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.75;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+/* Tool card slide-in */
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Shimmer for skeleton rows */
+@keyframes ps-shimmer {
+  0% {
+    background-position: -600px 0;
+  }
+  100% {
+    background-position: 600px 0;
+  }
+}
+
+/* Progress bar indeterminate slide */
+@keyframes ps-bar-slide {
+  0% {
+    left: -50%;
+    width: 40%;
+  }
+  50% {
+    left: 25%;
+    width: 55%;
+  }
+  100% {
+    left: 110%;
+    width: 40%;
+  }
+}
+
+/* Utility classes for animations */
+.animate-dot-jump {
+  animation: dot-jump 1.2s ease-in-out infinite;
+}
+
+.animate-live-pulse {
+  animation: live-pulse 1.9s ease-in-out infinite;
+}
+
+.animate-slide-in {
+  animation: slide-in 0.16s ease-out;
+}
+
+.animate-ps-shimmer {
+  animation: ps-shimmer 1.5s ease-in-out infinite;
+  background: linear-gradient(90deg, #d4e5d0 0%, #bdd3b8 50%, #d4e5d0 100%);
+  background-size: 600px 100%;
+}
+
+.animate-ps-bar-slide {
+  animation: ps-bar-slide 1.4s ease-in-out infinite;
+}
+
+.animate-ps-live-pulse {
+  animation: ps-live-pulse 1.9s ease-out infinite;
 }

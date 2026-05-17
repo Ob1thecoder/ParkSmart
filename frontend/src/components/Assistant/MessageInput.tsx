@@ -15,21 +15,21 @@ export function MessageInput({ disabled, onSend }: Props) {
   };
 
   return (
-    <div className="border-t border-black/5 p-3 pb-safe">
+    <div className="shrink-0 border-t border-black/5 bg-white px-3 py-3 pb-safe">
       <div className="flex gap-2">
-        <textarea
-          rows={2}
+        <input
+          type="text"
           value={text}
           disabled={disabled}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
+            if (e.key === "Enter") {
               e.preventDefault();
               submit();
             }
           }}
-          placeholder="Ask ParkSmart…"
-          className="min-h-[44px] flex-1 resize-none rounded-xl border border-black/10 px-3 py-2 text-sm outline-none ring-park-fern/25 focus:ring-2 disabled:bg-zinc-100"
+          placeholder="Ask Valet…"
+          className="h-11 flex-1 rounded-xl border border-black/10 px-3 text-sm outline-none ring-park-fern/25 focus:ring-2 disabled:bg-zinc-100"
         />
         <button
           type="button"

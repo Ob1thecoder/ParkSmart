@@ -43,6 +43,20 @@ function formatChip(viewTime: Date | null): string {
     .toUpperCase();
 }
 
+function formatLoadingDateTime(viewTime: Date): string {
+  return new Intl.DateTimeFormat("en-AU", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "Australia/Sydney",
+    timeZoneName: "short",
+  })
+    .format(viewTime)
+    .toUpperCase();
+}
+
 function hourOffset(viewTime: Date, base: Date): number {
   const deltaH = Math.round(
     (startOfHour(viewTime).getTime() - startOfHour(base).getTime()) / 3600000,
@@ -54,6 +68,65 @@ function hourOffset(viewTime: Date, base: Date): number {
 function formatForDatetimeLocal(d: Date): string {
   const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
   return local.toISOString().slice(0, 16);
+}
+
+function Spinner() {
+  return (
+    <svg
+      className="h-[13px] w-[13px] animate-spin text-park-fern"
+      viewBox="0 0 24 24"
+      fill="none"
+    >
+      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" opacity="0.25" />
+      <path
+        d="M12 2a10 10 0 019.95 9"
+        stroke="currentColor"
+        strokeWidth="3"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function LoadingSkeleton({ viewTime }: { viewTime: Date }) {
+  const widths = ["68%", "82%", "51%", "74%"];
+  const delays = [0, 0.13, 0.26, 0.39];
+
+  return (
+    <div className="mt-3 rounded-lg border border-park-fern/20 bg-park-mist/50 p-3">
+      <div className="flex items-center gap-2">
+        <Spinner />
+        <span className="text-xs font-semibold text-park-fern">Calculating predictions</span>
+      </div>
+      <p className="mt-1 text-[10px] text-park-slate">
+        {formatLoadingDateTime(viewTime)} · Sydney AEST
+      </p>
+      <div className="mt-2.5 h-[3px] overflow-hidden rounded-full bg-park-mist">
+        <div className="relative h-full w-full">
+          <div
+            className="absolute h-full rounded-full bg-park-fern animate-ps-bar-slide"
+            style={{ width: "40%" }}
+          />
+        </div>
+      </div>
+      <div className="mt-3 space-y-2">
+        {widths.map((w, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <div
+              className="h-2 rounded animate-ps-shimmer"
+              style={{
+                width: w,
+                animationDelay: `${delays[i]}s`,
+              }}
+            />
+            <span className="text-[10px] font-medium tabular-nums text-park-slate/50">
+              {Math.round(30 + Math.random() * 60)}%
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 type Props = {
@@ -125,8 +198,8 @@ export function TimeScrubber({ viewTime, onViewTimeChange, predictLoading }: Pro
           />
         </div>
       ) : null}
-      {predictLoading ? (
-        <p className="mt-2 text-center text-[11px] text-park-slate">Updating predictions…</p>
+      {predictLoading && viewTime ? (
+        <LoadingSkeleton viewTime={viewTime} />
       ) : null}
     </div>
   );

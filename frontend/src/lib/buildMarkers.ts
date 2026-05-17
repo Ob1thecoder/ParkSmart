@@ -13,8 +13,14 @@ export function buildMarkerDataList(
   predictLoading: boolean,
 ): MarkerData[] {
   if (!occ?.length) return [];
-  if (!viewTime || predictLoading) {
+  if (!viewTime) {
     return occ.map(occupancyToMarker);
+  }
+  if (predictLoading) {
+    return occ.map((o) => ({
+      ...occupancyToMarker(o),
+      predictionPending: true,
+    }));
   }
   return occ.map((o) => {
     const p = pred[o.car_park_id];

@@ -47,55 +47,81 @@ function Shell() {
   }, [selectedId, isDesktop]);
 
   return (
-    <div className="flex h-dvh flex-col md:flex-row">
-      <div className="relative flex flex-1 flex-col min-h-[50vh] md:min-h-0">
-        <MapView
-          markers={markers}
-          occupancyRows={data}
-          loading={!data && !loadError}
-          loadError={loadError}
-          onRetry={retry}
-          isDesktop={isDesktop}
-          onSelectMarker={handleSelectMarker}
-        />
+    <div className="flex h-dvh flex-col">
+      <header className="flex shrink-0 items-center justify-between bg-park-ink px-4 py-3 z-[500]">
+        <h1 className="font-display text-base font-semibold text-white tracking-wide">ParkChatswood</h1>
+        <span className="text-xs font-medium uppercase tracking-widest text-park-fern">Chatswood</span>
+      </header>
 
-        <div className="pointer-events-none absolute left-0 right-0 top-0 z-[400] p-3 md:left-4 md:right-auto md:max-w-md">
-          <div className="pointer-events-auto space-y-0">
-            <SearchField onStreetChosen={(s) => void zones.load(s)} />
-            <ZoneRulesCard
-              zone={zones.zone}
-              notFound={zones.notFound}
-              loadError={zones.loadError}
-              loading={zones.loading}
-              streetQuery={zones.streetQuery}
-            />
-            {stale ? (
-              <p className="mt-2 rounded-lg bg-amber-50/95 px-2 py-1 text-[11px] text-amber-900 shadow-sm">
-                Live data may be stale — reconnecting in the background.
-              </p>
+      <div className="flex flex-1 flex-col md:flex-row overflow-hidden">
+        <div className="relative flex flex-1 flex-col min-h-[50vh] md:min-h-0">
+          <MapView
+            markers={markers}
+            occupancyRows={data}
+            loading={!data && !loadError}
+            loadError={loadError}
+            onRetry={retry}
+            isDesktop={isDesktop}
+            viewTime={viewTime}
+            predictLoading={predictLoading}
+            onSelectMarker={handleSelectMarker}
+          />
+
+          <div className="pointer-events-none absolute left-0 right-0 top-0 z-[400] p-3 md:left-4 md:right-auto md:max-w-md">
+            <div className="pointer-events-auto space-y-0">
+              <SearchField onStreetChosen={(s) => void zones.load(s)} onClear={zones.clear} />
+              <ZoneRulesCard
+                zone={zones.zone}
+                notFound={zones.notFound}
+                loadError={zones.loadError}
+                loading={zones.loading}
+                streetQuery={zones.streetQuery}
+                onClose={zones.clear}
+              />
+              {stale ? (
+                <p className="mt-2 rounded-lg bg-amber-50/95 px-2 py-1 text-[11px] text-amber-900 shadow-sm">
+                  Live data may be stale — reconnecting in the background.
+                </p>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="pointer-events-none absolute bottom-4 left-0 right-0 z-[400] flex flex-col items-center gap-3 px-3 md:bottom-6 md:left-4 md:right-auto md:items-start">
+            {!isDesktop && !sheetOpen ? (
+              <button
+                type="button"
+                onClick={() => setSheetOpen(true)}
+                className="pointer-events-auto flex items-center gap-2 rounded-full bg-park-ink px-5 py-3 text-sm font-semibold text-white shadow-lg"
+              >
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/20 text-[10px] font-bold">V</span>
+                Ask Valet…
+              </button>
             ) : null}
+            <div className="pointer-events-auto w-full max-w-md">
+              <TimeScrubber
+                viewTime={viewTime}
+                onViewTimeChange={setViewTime}
+                predictLoading={predictLoading}
+              />
+            </div>
           </div>
         </div>
 
-        <div className="pointer-events-none absolute bottom-28 left-0 right-0 z-[400] flex justify-center px-3 md:bottom-6 md:left-4 md:right-auto md:justify-start">
-          <div className="pointer-events-auto w-full max-w-md">
-            <TimeScrubber
-              viewTime={viewTime}
-              onViewTimeChange={setViewTime}
-              predictLoading={predictLoading}
-            />
-          </div>
-        </div>
+        <AssistantPanel
+          isDesktop={isDesktop}
+          mobileExpanded={sheetOpen}
+          onMobileExpandedChange={setSheetOpen}
+          detail={detail}
+          detailAsOf={detailAsOf}
+          detailViewTime={viewTime}
+          onCloseDetail={() => setSelectedId(null)}
+          occupancy={data ?? []}
+          occupancyLoading={!data && !loadError}
+          predictions={byId}
+          viewTime={viewTime ?? undefined}
+          onSelectCarPark={handleSelectMarker}
+        />
       </div>
-
-      <AssistantPanel
-        isDesktop={isDesktop}
-        mobileExpanded={sheetOpen}
-        onMobileExpandedChange={setSheetOpen}
-        detail={detail}
-        detailAsOf={detailAsOf}
-        onCloseDetail={() => setSelectedId(null)}
-      />
     </div>
   );
 }

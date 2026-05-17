@@ -58,6 +58,8 @@ type Props = {
   loadError: string | null;
   onRetry: () => void;
   isDesktop: boolean;
+  viewTime: Date | null;
+  predictLoading: boolean;
   onSelectMarker: (id: string) => void;
 };
 
@@ -68,6 +70,8 @@ export function MapView({
   loadError,
   onRetry,
   isDesktop,
+  viewTime,
+  predictLoading,
   onSelectMarker,
 }: Props) {
   const asOfById = useMemo(() => {
@@ -83,6 +87,7 @@ export function MapView({
         zoom={DEFAULT_ZOOM}
         className="h-full w-full z-0"
         scrollWheelZoom
+        zoomControl={false}
       >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
@@ -100,10 +105,21 @@ export function MapView({
             data={data}
             isDesktop={isDesktop}
             asOf={asOfById.get(data.id)}
+            viewTime={viewTime}
             onSelect={onSelectMarker}
           />
         ))}
       </MapContainer>
+
+      {predictLoading && viewTime ? (
+        <div className="pointer-events-none absolute bottom-36 left-1/2 z-[450] w-[min(92vw,20rem)] -translate-x-1/2 rounded-2xl border border-violet-200 bg-violet-50/95 px-4 py-3 text-center text-sm text-violet-950 shadow-lg md:bottom-24">
+          <span className="mr-2 inline-block h-4 w-4 animate-spin rounded-full border-2 border-violet-600 border-t-transparent align-[-2px]" />
+          <strong>Calculating predictions</strong>
+          <div className="mt-1 text-xs font-normal text-violet-900/90">
+            Updating each car park for your selected time…
+          </div>
+        </div>
+      ) : null}
 
       {loadError ? (
         <div className="absolute bottom-28 left-3 right-3 z-[500] rounded-xl bg-white/95 p-3 text-sm shadow-lg md:bottom-6 md:left-6 md:right-auto md:max-w-sm">

@@ -10,7 +10,12 @@ import {
 import { postChatStream } from "../api";
 import type { ChatStreamEvent } from "../types";
 
-export type ChatToolEntry = { tool: string; input: Record<string, unknown> };
+export type ChatToolEntry = {
+  tool: string;
+  input: Record<string, unknown>;
+  result?: Record<string, unknown>;
+  isRunning: boolean;
+};
 
 export type ChatMessage =
   | { id: string; role: "user"; content: string }
@@ -57,20 +62,39 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         );
       };
 
+      let streamError: string | null = null;
+
       const onEvent = (ev: ChatStreamEvent) => {
         if (ev.type === "text") {
           accumulated += ev.content;
           patchAssistant({ content: accumulated });
         } else if (ev.type === "tool_call") {
-          tools.push({ tool: ev.tool, input: ev.input });
+          tools.push({ tool: ev.tool, input: ev.input, isRunning: true });
           patchAssistant({ tools: [...tools] });
+        } else if (ev.type === "tool_result") {
+          const idx = tools.findIndex((t) => t.tool === ev.tool && t.isRunning);
+          if (idx >= 0) {
+            tools[idx] = { ...tools[idx], result: ev.result, isRunning: false };
+            patchAssistant({ tools: [...tools] });
+          }
+        } else if (ev.type === "error") {
+          streamError = ev.message;
         }
       };
 
       await postChatStream({ message: trimmed, history: priorHistory }, onEvent);
+
+      if (streamError) {
+        throw new Error(streamError);
+      }
+
+      tools.forEach((t) => {
+        t.isRunning = false;
+      });
+      patchAssistant({ tools: [...tools], streaming: false });
+
       historyRef.current.push({ role: "user", content: trimmed });
       historyRef.current.push({ role: "assistant", content: accumulated });
-      patchAssistant({ streaming: false });
     },
     [],
   );

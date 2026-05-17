@@ -16,6 +16,9 @@ export function occupancyToMarker(o: OccupancyResponse): MarkerData {
     pct: o.occupancy_pct,
     source: o.source,
     mode: "live",
+    capacity: o.capacity,
+    occupied: o.occupied,
+    available: o.available,
   };
 }
 
@@ -23,6 +26,9 @@ export function predictionToMarker(
   o: OccupancyResponse,
   p: PredictionResult,
 ): MarkerData {
+  const cap = o.capacity;
+  const occ = Math.round(p.predicted_occupancy_pct * cap);
+  const avail = Math.max(0, cap - occ);
   return {
     id: o.car_park_id,
     name: o.name,
@@ -33,7 +39,23 @@ export function predictionToMarker(
     mode: "predicted",
     confidence: p.confidence,
     modelVersion: p.model_version,
+    capacity: cap,
+    occupied: cap > 0 ? occ : undefined,
+    available: cap > 0 ? avail : undefined,
+    targetDatetime: p.target_datetime,
   };
+}
+
+export function confidenceLevel(confidence: number): "High" | "Medium" | "Low" {
+  if (confidence >= 0.8) return "High";
+  if (confidence >= 0.5) return "Medium";
+  return "Low";
+}
+
+export function confidenceColor(level: "High" | "Medium" | "Low"): string {
+  if (level === "High") return "#16a34a";
+  if (level === "Medium") return "#c9780a";
+  return "#b4232c";
 }
 
 export function missingPredictionMarker(o: OccupancyResponse): MarkerData {
@@ -46,11 +68,22 @@ export function missingPredictionMarker(o: OccupancyResponse): MarkerData {
     source: o.source,
     mode: "predicted",
     predictionMissing: true,
+    capacity: o.capacity,
+    occupied: o.occupied,
+    available: o.available,
   };
 }
 
 export function provenanceBadge(data: MarkerData): { label: string; className: string }[] {
   const badges: { label: string; className: string }[] = [];
+
+  if (data.predictionPending) {
+    badges.push({
+      label: "Calculating prediction…",
+      className: "bg-violet-100 text-violet-900 ring-1 ring-violet-300",
+    });
+    return badges;
+  }
 
   if (data.predictionMissing) {
     badges.push({

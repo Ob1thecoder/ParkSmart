@@ -8,15 +8,15 @@ type Props = {
   data: MarkerData;
   isDesktop: boolean;
   asOf?: string;
+  viewTime: Date | null;
   onSelect: (id: string) => void;
 };
 
-export function CarParkMarker({ data, isDesktop, asOf, onSelect }: Props) {
+export function CarParkMarker({ data, isDesktop, asOf, viewTime, onSelect }: Props) {
   // Rebuild the icon only when something it draws actually changes.
   const icon = useMemo(
     () => createParkDivIcon(data),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [data.pct, data.source, data.predictionMissing],
+    [data.pct, data.source, data.predictionMissing, data.predictionPending],
   );
 
   return (
@@ -30,7 +30,7 @@ export function CarParkMarker({ data, isDesktop, asOf, onSelect }: Props) {
       {isDesktop ? (
         <Popup>
           <div className="min-w-[220px]">
-            <CarParkDetail data={data} asOf={asOf} compact />
+            <CarParkDetail data={data} asOf={asOf} viewTime={viewTime} compact />
           </div>
         </Popup>
       ) : null}
