@@ -24,12 +24,15 @@ async def lifespan(app: FastAPI):
     global _scheduler
     log.info("Starting ParkSmart backend")
 
-    # 1. Bootstrap database
-    init_db(settings.db_path)
-    log.info("Database ready at %s", settings.db_path)
+    # 1. Bootstrap database (auto-creates tables)
+    init_db()
+    if settings.use_postgres:
+        log.info("Database ready (PostgreSQL)")
+    else:
+        log.info("Database ready at %s", settings.db_path)
 
     # 2. Seed car parks (idempotent)
-    seed_car_parks(settings.db_path)
+    seed_car_parks(None)
     log.info("Car parks seeded")
 
     # 3. Parse KML (if file exists)
@@ -37,7 +40,7 @@ async def lifespan(app: FastAPI):
     geocode_cache = Path(__file__).parent / "data" / "geocode_cache.json"
     if kml_path.exists():
         signs = parse_kml(kml_path, geocode=True, cache_path=geocode_cache)
-        with get_connection(settings.db_path) as con:
+        with get_connection() as con:
             con.executemany(
                 """
                 INSERT OR IGNORE INTO parking_signs
@@ -59,11 +62,11 @@ async def lifespan(app: FastAPI):
         log.warning("KML file not found at %s — skipping sign load", kml_path)
 
     # 4. Backfill 90 days of simulated history (idempotent — INSERT OR IGNORE)
-    backfill_sim_history(settings.db_path, days=90)
+    backfill_sim_history(None, days=90)
     log.info("Sim history backfill complete")
 
     # 5. Start background scheduler
-    _scheduler = create_scheduler(settings.db_path, settings)
+    _scheduler = create_scheduler(None, settings)
     _scheduler.start()
     log.info("Scheduler started")
 
