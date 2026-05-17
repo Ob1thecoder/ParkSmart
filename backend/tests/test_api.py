@@ -68,6 +68,15 @@ def test_zones_not_found(client):
     assert resp.status_code == 404
 
 
+def test_zones_streets_returns_sorted_list(client):
+    resp = client.get("/api/zones/streets")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert isinstance(data, list)
+    assert "Victoria Avenue" in data
+    assert data == sorted(data, key=str.casefold)
+
+
 # --- /api/predict ---
 
 def test_predict_returns_result(client):

@@ -53,6 +53,34 @@ def get_zone_restrictions(street: str, db_path: Path) -> dict:
     return {"error": "not_found"}
 
 
+def list_streets(db_path: Path) -> list[str]:
+    """
+    Distinct streets from parking_signs plus streets in seed_zones.json,
+    case-insensitively deduped and sorted.
+    """
+    by_key: dict[str, str] = {}
+
+    def add(name: str) -> None:
+        cleaned = name.strip()
+        if cleaned:
+            by_key.setdefault(cleaned.casefold(), cleaned)
+
+    with get_connection(db_path) as con:
+        rows = con.execute(
+            "SELECT DISTINCT street FROM parking_signs "
+            "WHERE street IS NOT NULL AND TRIM(street) != ''"
+        ).fetchall()
+    for row in rows:
+        add(row["street"])
+
+    seed = _load_seed()
+    for entry in seed.values():
+        if isinstance(entry, dict) and "street" in entry:
+            add(str(entry["street"]))
+
+    return sorted(by_key.values(), key=str.casefold)
+
+
 def _signs_to_segments(rows: list[dict]) -> list[ZoneSegment]:
     """Group DB sign rows into segments by direction."""
     groups: dict[str | None, list[dict]] = defaultdict(list)

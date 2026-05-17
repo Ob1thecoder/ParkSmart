@@ -66,3 +66,9 @@ def test_signs_to_segments_groups_by_direction(seeded_db):
     sides = {seg["side"] for seg in result["segments"]}
     assert "left" in sides
     assert "right" in sides
+
+
+def test_list_streets_includes_seed_and_sorted(seeded_db):
+    streets = zone_service.list_streets(seeded_db)
+    assert "Victoria Avenue" in streets
+    assert streets == sorted(streets, key=str.casefold)

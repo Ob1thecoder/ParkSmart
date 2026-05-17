@@ -5,6 +5,11 @@ from app.services import zone_service
 router = APIRouter()
 
 
+@router.get("/zones/streets")
+def list_street_names(settings: Settings = Depends(get_settings)) -> list[str]:
+    return zone_service.list_streets(settings.db_path)
+
+
 @router.get("/zones")
 def get_zones(
     street: str = Query(..., description="Street name in Chatswood CBD"),
