@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+backend/.env
+backend/*.db
+
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+
+# Git
+.git/
+.gitignore
+
+# Tests
+backend/tests/
+
+# Other
+*.md
+render.yaml
