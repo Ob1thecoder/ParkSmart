@@ -22,7 +22,6 @@ services:
   - type: web
     name: parksmart-frontend
     runtime: static
-    region: singapore
     rootDir: frontend
     buildCommand: npm install && npm run build
     staticPublishPath: dist
@@ -31,7 +30,7 @@ services:
         fromService:
           name: parksmart-api
           type: web
-          property: hostport
+          property: host
     headers:
       - path: /*
         name: Cache-Control

@@ -6,7 +6,14 @@ import type {
   ZoneResponse,
 } from "./types";
 
-const API_BASE = import.meta.env.VITE_API_URL || "";
+function getApiBase(): string {
+  const url = import.meta.env.VITE_API_URL || "";
+  if (!url) return "";
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  return `https://${url}`;
+}
+
+const API_BASE = getApiBase();
 
 export class ApiError extends Error {
   constructor(
