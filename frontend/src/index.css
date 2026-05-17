@@ -1,0 +1,40 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  @apply bg-park-mist text-park-ink font-sans antialiased;
+}
+
+.leaflet-container {
+  font-family: inherit;
+}
+
+.park-marker-wrap {
+  background: transparent !important;
+  border: none !important;
+}
+
+/* Bottom sheet safe area */
+.pb-safe {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(0.92);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
