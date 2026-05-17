@@ -8,17 +8,22 @@ export function occupancyColor(pct: number): string {
 }
 
 export function occupancyToMarker(o: OccupancyResponse): MarkerData {
+  // Clamp values to handle bad sensor data
+  const pct = Math.max(0, Math.min(1, o.occupancy_pct));
+  const available = Math.max(0, Math.min(o.available, o.capacity));
+  const occupied = Math.max(0, o.capacity - available);
+
   return {
     id: o.car_park_id,
     name: o.name,
     lat: o.lat,
     lon: o.lon,
-    pct: o.occupancy_pct,
+    pct,
     source: o.source,
     mode: "live",
     capacity: o.capacity,
-    occupied: o.occupied,
-    available: o.available,
+    occupied,
+    available,
   };
 }
 
@@ -59,18 +64,23 @@ export function confidenceColor(level: "High" | "Medium" | "Low"): string {
 }
 
 export function missingPredictionMarker(o: OccupancyResponse): MarkerData {
+  // Clamp values to handle bad sensor data
+  const pct = Math.max(0, Math.min(1, o.occupancy_pct));
+  const available = Math.max(0, Math.min(o.available, o.capacity));
+  const occupied = Math.max(0, o.capacity - available);
+
   return {
     id: o.car_park_id,
     name: o.name,
     lat: o.lat,
     lon: o.lon,
-    pct: o.occupancy_pct,
+    pct,
     source: o.source,
     mode: "predicted",
     predictionMissing: true,
     capacity: o.capacity,
-    occupied: o.occupied,
-    available: o.available,
+    occupied,
+    available,
   };
 }
 
