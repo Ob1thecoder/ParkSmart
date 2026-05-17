@@ -48,7 +48,7 @@ function Shell() {
 
   return (
     <div className="flex h-dvh flex-col md:flex-row">
-      <div className="relative min-h-[56vh] flex-1 md:min-h-0">
+      <div className="relative flex flex-1 flex-col min-h-[50vh] md:min-h-0">
         <MapView
           markers={markers}
           occupancyRows={data}

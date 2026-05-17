@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getOccupancy } from "../api";
+import { ApiError, getOccupancy } from "../api";
 import type { OccupancyResponse } from "../types";
 
 const POLL_MS = 5 * 60 * 1000;
@@ -18,7 +18,12 @@ export function useOccupancy() {
       setStale(false);
       setLoadError(null);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Request failed";
+      const msg =
+        e instanceof ApiError
+          ? e.message || `HTTP ${e.status}`
+          : e instanceof Error
+            ? e.message
+            : "Request failed";
       if (lastGoodRef.current) {
         setData(lastGoodRef.current);
         setStale(true);
