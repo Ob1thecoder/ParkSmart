@@ -226,7 +226,7 @@ APScheduler (runs continuously)
 | Frontend | React + Vite + Leaflet | Fast dev, modern, battle-tested mapping |
 | Backend | FastAPI | Async support, auto OpenAPI, type safety |
 | Database | SQLite (stdlib) | Zero-ops, appropriate scale, WAL mode |
-| LLM | Claude Haiku 4.5 | Fast, cheap, excellent tool calling |
+| LLM | GPT mini | Fast, cheap, excellent tool calling |
 | ML (Plan 3) | XGBoost + scikit-learn | Best for tabular time-series |
 | Scheduler | APScheduler 3.x | Simple, in-process, no Redis needed |
 | HTTP Client | httpx | Async support, modern, well-typed |

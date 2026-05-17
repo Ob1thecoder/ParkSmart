@@ -87,16 +87,25 @@ def _parse_fields(html: str) -> dict[str, str]:
     return result
 
 
+_CACHE_FLUSH_EVERY = 50
+
+
 def _reverse_geocode_all(
     records: list[ParkingSignRecord], cache_path: Path | None
 ) -> None:
     """Resolve street names. A JSON cache at `cache_path` lets later runs skip
-    the Nominatim calls — only cache misses hit the network."""
+    the Nominatim calls — only cache misses hit the network. The cache is
+    flushed to disk every `_CACHE_FLUSH_EVERY` lookups so a long run is
+    resumable if interrupted."""
     cache: dict[str, str] = {}
     if cache_path and cache_path.exists():
         cache = json.loads(cache_path.read_text())
 
-    dirty = False
+    def _flush() -> None:
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(json.dumps(cache, indent=2, sort_keys=True))
+
+    new_since_flush = 0
     with httpx.Client(headers={"User-Agent": _USER_AGENT}, timeout=10.0) as client:
         for record in records:
             key = f"{record.lat},{record.lon}"
@@ -108,12 +117,14 @@ def _reverse_geocode_all(
             record.street = street
             if street is not None:
                 cache[key] = street
-                dirty = True
+                new_since_flush += 1
+                if cache_path and new_since_flush >= _CACHE_FLUSH_EVERY:
+                    _flush()
+                    new_since_flush = 0
             time.sleep(1.0)  # Nominatim rate limit: 1 req/s
 
-    if cache_path and dirty:
-        cache_path.parent.mkdir(parents=True, exist_ok=True)
-        cache_path.write_text(json.dumps(cache, indent=2, sort_keys=True))
+    if cache_path and new_since_flush:
+        _flush()
         log.info("Geocode cache updated (%d entries) at %s", len(cache), cache_path)
 
 

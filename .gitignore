@@ -39,3 +39,6 @@ CLAUDE.md
 .cursorrules
 *.postman_collection.json
 POSTMAN_SETUP.md
+
+# Local dev notes
+process-cleanup.md
