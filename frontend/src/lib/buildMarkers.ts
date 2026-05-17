@@ -11,12 +11,18 @@ export function buildMarkerDataList(
   viewTime: Date | null,
   pred: PredictionMap,
   predictLoading: boolean,
+  isDesktop: boolean = true,
 ): MarkerData[] {
   if (!occ?.length) return [];
   if (!viewTime) {
     return occ.map(occupancyToMarker);
   }
   if (predictLoading) {
+    // On mobile: keep showing live data while predictions load (no jarring pending state)
+    // On desktop: show pending state with visual feedback
+    if (!isDesktop) {
+      return occ.map(occupancyToMarker);
+    }
     return occ.map((o) => ({
       ...occupancyToMarker(o),
       predictionPending: true,

@@ -145,7 +145,7 @@ export function MapView({
         )}
       </Map>
 
-      {predictLoading && viewTime ? (
+      {predictLoading && viewTime && isDesktop ? (
         <div className="pointer-events-none absolute bottom-36 left-1/2 z-[450] w-[min(92vw,20rem)] -translate-x-1/2 rounded-2xl border border-violet-200 bg-violet-50/95 px-4 py-3 text-center text-sm text-violet-950 shadow-lg md:bottom-24">
           <span className="mr-2 inline-block h-4 w-4 animate-spin rounded-full border-2 border-violet-600 border-t-transparent align-[-2px]" />
           <strong>Calculating predictions</strong>

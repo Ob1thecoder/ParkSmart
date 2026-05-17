@@ -133,9 +133,10 @@ type Props = {
   viewTime: Date | null;
   onViewTimeChange: (d: Date | null) => void;
   predictLoading?: boolean;
+  isDesktop?: boolean;
 };
 
-export function TimeScrubber({ viewTime, onViewTimeChange, predictLoading }: Props) {
+export function TimeScrubber({ viewTime, onViewTimeChange, predictLoading, isDesktop = true }: Props) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const base = startOfHour(new Date());
   const sliderVal = viewTime == null ? 0 : hourOffset(viewTime, base);
@@ -160,10 +161,13 @@ export function TimeScrubber({ viewTime, onViewTimeChange, predictLoading }: Pro
         </span>
         <button
           type="button"
-          className="rounded-full bg-park-ink px-3 py-1 text-xs font-bold text-white"
+          className="flex items-center gap-1.5 rounded-full bg-park-ink px-3 py-1 text-xs font-bold text-white"
           onClick={() => setPickerOpen((o) => !o)}
         >
           {formatChip(viewTime)}
+          {predictLoading && viewTime && !isDesktop ? (
+            <span className="h-1.5 w-1.5 rounded-full bg-park-fern animate-pulse" />
+          ) : null}
         </button>
       </div>
       <input
@@ -198,7 +202,7 @@ export function TimeScrubber({ viewTime, onViewTimeChange, predictLoading }: Pro
           />
         </div>
       ) : null}
-      {predictLoading && viewTime ? (
+      {predictLoading && viewTime && isDesktop ? (
         <LoadingSkeleton viewTime={viewTime} />
       ) : null}
     </div>

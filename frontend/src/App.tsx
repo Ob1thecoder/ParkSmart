@@ -21,8 +21,8 @@ function Shell() {
   const { byId, loading: predictLoading } = usePredictions(viewTime, data);
 
   const markers = useMemo(
-    () => buildMarkerDataList(data, viewTime, byId, predictLoading),
-    [data, viewTime, byId, predictLoading],
+    () => buildMarkerDataList(data, viewTime, byId, predictLoading, isDesktop),
+    [data, viewTime, byId, predictLoading, isDesktop],
   );
 
   const zones = useZones();
@@ -102,6 +102,7 @@ function Shell() {
                 viewTime={viewTime}
                 onViewTimeChange={setViewTime}
                 predictLoading={predictLoading}
+                isDesktop={isDesktop}
               />
             </div>
           </div>
