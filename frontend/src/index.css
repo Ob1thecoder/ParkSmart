@@ -13,13 +13,41 @@ body {
   @apply bg-park-mist text-park-ink font-sans antialiased;
 }
 
-.leaflet-container {
+/* MapLibre GL styles */
+.maplibregl-map {
   font-family: inherit;
 }
 
-.park-marker-wrap {
-  background: transparent !important;
-  border: none !important;
+.maplibregl-popup-content {
+  padding: 0;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(12, 26, 20, 0.15);
+}
+
+.maplibregl-popup-close-button {
+  font-size: 18px;
+  padding: 4px 8px;
+  color: #5c6f66;
+}
+
+.maplibregl-popup-close-button:hover {
+  background: transparent;
+  color: #0c1a14;
+}
+
+.maplibregl-ctrl-attrib {
+  font-size: 10px;
+}
+
+/* Map marker styles */
+.park-marker {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.park-marker:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 16px rgba(12, 26, 20, 0.35) !important;
 }
 
 /* Bottom sheet safe area */
@@ -40,8 +68,8 @@ body {
   }
 }
 
-/* Map marker pending state */
-@keyframes marker-pending-pulse {
+/* Map marker pulse animation */
+@keyframes marker-pulse {
   0%,
   100% {
     transform: scale(0.94);
@@ -51,6 +79,10 @@ body {
     transform: scale(1);
     opacity: 1;
   }
+}
+
+.animate-marker-pulse {
+  animation: marker-pulse 1.1s ease-in-out infinite;
 }
 
 /* Streaming typing dots */

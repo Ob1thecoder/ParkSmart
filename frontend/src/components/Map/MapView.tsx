@@ -1,55 +1,26 @@
-import { useEffect, useMemo, useRef } from "react";
-import { MapContainer, TileLayer, Marker, useMap } from "react-leaflet";
-import L from "leaflet";
-import type { MarkerData } from "../../types";
-import type { OccupancyResponse } from "../../types";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Map, { NavigationControl, Popup } from "react-map-gl/maplibre";
+import type { MapRef } from "react-map-gl/maplibre";
+import type { LngLatBoundsLike } from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
+import type { MarkerData, OccupancyResponse } from "../../types";
 import { CarParkMarker } from "./CarParkMarker";
+import { CarParkDetail } from "./CarParkDetail";
 
-/** Approximate bounds covering Chatswood CBD + Gordon/Lindfield markers */
-const DEFAULT_CENTER: [number, number] = [-33.79, 151.175];
+const DEFAULT_CENTER = { longitude: 151.175, latitude: -33.79 };
 const DEFAULT_ZOOM = 12;
 
 const SKELETON_COORDS: [number, number][] = [
-  [-33.7972, 151.1825],
-  [-33.7964, 151.1799],
-  [-33.7992, 151.1804],
-  [-33.7975, 151.181],
-  [-33.7968, 151.1788],
-  [-33.756009, 151.154528],
-  [-33.775185, 151.169111],
+  [151.1825, -33.7972],
+  [151.1799, -33.7964],
+  [151.1804, -33.7992],
+  [151.181, -33.7975],
+  [151.1788, -33.7968],
+  [151.154528, -33.756009],
+  [151.169111, -33.775185],
 ];
 
-/**
- * Fits the map to the car-park markers once. Re-fits only when the *set* of
- * car parks changes — not on every occupancy poll or time scrub, so the user's
- * pan/zoom is preserved.
- */
-function FitBounds({ markers }: { markers: MarkerData[] }) {
-  const map = useMap();
-  const fittedSig = useRef<string | null>(null);
-  useEffect(() => {
-    if (markers.length === 0) return;
-    const sig = markers
-      .map((m) => m.id)
-      .slice()
-      .sort()
-      .join("|");
-    if (sig === fittedSig.current) return;
-    fittedSig.current = sig;
-    const b = L.latLngBounds(
-      markers.map((m) => [m.lat, m.lon] as [number, number]),
-    );
-    map.fitBounds(b, { padding: [48, 48], maxZoom: 13 });
-  }, [map, markers]);
-  return null;
-}
-
-const skIcon = L.divIcon({
-  className: "park-marker-wrap",
-  html: `<div style="width:20px;height:20px;border-radius:50%;background:rgba(148,163,184,0.5);animation:skeleton-pulse 1.2s ease-in-out infinite"></div>`,
-  iconSize: [20, 20],
-  iconAnchor: [10, 10],
-});
+const MAP_STYLE = "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
 
 type Props = {
   markers: MarkerData[];
@@ -74,42 +45,105 @@ export function MapView({
   predictLoading,
   onSelectMarker,
 }: Props) {
+  const mapRef = useRef<MapRef>(null);
+  const fittedSig = useRef<string | null>(null);
+  const [popupInfo, setPopupInfo] = useState<MarkerData | null>(null);
+
   const asOfById = useMemo(() => {
     const m = new Map<string, string>();
     occupancyRows?.forEach((r) => m.set(r.car_park_id, r.as_of));
     return m;
   }, [occupancyRows]);
 
+  useEffect(() => {
+    if (markers.length === 0 || !mapRef.current) return;
+    const sig = markers.map((m) => m.id).slice().sort().join("|");
+    if (sig === fittedSig.current) return;
+    fittedSig.current = sig;
+
+    const lngs = markers.map((m) => m.lon);
+    const lats = markers.map((m) => m.lat);
+    const bounds: LngLatBoundsLike = [
+      [Math.min(...lngs) - 0.01, Math.min(...lats) - 0.01],
+      [Math.max(...lngs) + 0.01, Math.max(...lats) + 0.01],
+    ];
+    mapRef.current.fitBounds(bounds, { padding: 60, maxZoom: 14, duration: 500 });
+  }, [markers]);
+
+  const handleMarkerClick = useCallback(
+    (data: MarkerData) => {
+      if (isDesktop) {
+        setPopupInfo(data);
+      }
+      onSelectMarker(data.id);
+    },
+    [isDesktop, onSelectMarker]
+  );
+
   return (
     <div className="relative h-full w-full bg-park-mist">
-      <MapContainer
-        center={DEFAULT_CENTER}
-        zoom={DEFAULT_ZOOM}
-        className="h-full w-full z-0"
-        scrollWheelZoom
-        zoomControl={false}
+      <Map
+        ref={mapRef}
+        initialViewState={{
+          ...DEFAULT_CENTER,
+          zoom: DEFAULT_ZOOM,
+        }}
+        style={{ width: "100%", height: "100%" }}
+        mapStyle={MAP_STYLE}
+        attributionControl={false}
       >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
-        {markers.length > 0 ? <FitBounds markers={markers} /> : null}
+        <NavigationControl position="bottom-right" showCompass={false} />
+
         {loading && !markers.length
           ? SKELETON_COORDS.map((pos, i) => (
-              <Marker key={i} position={pos} icon={skIcon} interactive={false} />
+              <CarParkMarker
+                key={`skeleton-${i}`}
+                data={{
+                  id: `skeleton-${i}`,
+                  name: "",
+                  lat: pos[1],
+                  lon: pos[0],
+                  pct: 0,
+                  source: "simulated",
+                  mode: "live",
+                  predictionPending: false,
+                  predictionMissing: true,
+                }}
+                isSkeleton
+                onClick={() => {}}
+              />
             ))
           : null}
+
         {markers.map((data) => (
           <CarParkMarker
             key={data.id}
             data={data}
-            isDesktop={isDesktop}
-            asOf={asOfById.get(data.id)}
-            viewTime={viewTime}
-            onSelect={onSelectMarker}
+            onClick={() => handleMarkerClick(data)}
           />
         ))}
-      </MapContainer>
+
+        {popupInfo && isDesktop && (
+          <Popup
+            longitude={popupInfo.lon}
+            latitude={popupInfo.lat}
+            anchor="bottom"
+            onClose={() => setPopupInfo(null)}
+            closeButton={true}
+            closeOnClick={false}
+            className="park-popup"
+          >
+            <div className="min-w-[220px] p-1">
+              <CarParkDetail
+                data={popupInfo}
+                asOf={asOfById.get(popupInfo.id)}
+                viewTime={viewTime}
+                compact
+              />
+            </div>
+          </Popup>
+        )}
+      </Map>
 
       {predictLoading && viewTime ? (
         <div className="pointer-events-none absolute bottom-36 left-1/2 z-[450] w-[min(92vw,20rem)] -translate-x-1/2 rounded-2xl border border-violet-200 bg-violet-50/95 px-4 py-3 text-center text-sm text-violet-950 shadow-lg md:bottom-24">
