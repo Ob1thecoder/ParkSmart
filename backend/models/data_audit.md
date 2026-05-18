@@ -17,3 +17,7 @@ Each facility must have ≥ 30 distinct days AND ≥ 500 rows.
 ## Verdict
 
 **GATE PASS.** Both facilities have ~4 months of history. Proceed with the full XGBoost pipeline (Tasks 3–6) and run real training in Task 4.
+
+## Updated policy (2026-05-18)
+
+`collect_history.py` inserts history for **all** seeded TfNSW IDs. Training (`python -m app.ml.train`) loads every such ID present in `occupancy_history`, building **one-hot `park__<car_park_id>` columns** alongside temporal + lag features. Per-facility audits like the table above can be repeated once additional sites accumulate rows; **`train.py`** separately enforces a **minimum pooled hourly training frame** (`_min_training_rows`) before fitting.

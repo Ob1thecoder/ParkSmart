@@ -1,6 +1,6 @@
 # How a Training Dataset Works — The ParkSmart Occupancy Model
 
-> A walkthrough using the code you just built. I'll assume you can read Python but have never trained a model. We'll go from raw API data to a trained predictor, stopping to explain *why* at every step.
+> **Revision 2026-05-18:** Module 10 documents inference-time lag widening, why many sites briefly looked “the same %”, **`simulator-v1` = flat 50%** without a bundled model — **plus Module 8 § “Why the number often looks too high”** (confidence heuristic vs calibrated probability). A walkthrough using the code you just built. I'll assume you can read Python but have never trained a model. We'll go from raw API data to a trained predictor, stopping to explain *why* at every step.
 
 ---
 
@@ -98,7 +98,7 @@ After this, every example is exactly **one car park at one specific hour**. This
 
 Now we build the input columns. This is where beginners underestimate the work: **a model is only as smart as the features you hand it**. XGBoost can't "see" a timestamp the way you do. You have to translate human intuition (*"Friday evening near a station is busy"*) into numbers.
 
-Your `FEATURE_COLUMNS` has 10. Let's go through each type.
+Your `FEATURE_COLUMNS` lists **every numeric input**: **8 temporal + lag floats** (`hour_sin` … `lag_168h`) plus **one `park__…` dummy per seeded TfNSW site** (~44 binary columns today). Conceptually we'll walk the *types*, not memorise sixty column names.
 
 ### 4a. Cyclical Time — `hour_sin`, `hour_cos`, `dow_sin`, `dow_cos`
 
@@ -123,18 +123,20 @@ The model now sees morning and evening as genuinely opposite points, and midnigh
 
 > 💡 **Why two columns (sin AND cos)?** One alone is ambiguous — `sin = 1.0` happens at one angle, but `sin = 0.5` happens at two different hours. You need the pair to pin down a unique point on the circle.
 
-### 4b. Categorical — `is_gordon`, `is_lindfield` (One-Hot Encoding)
+### 4b. Facility identity — **`park__<car_park_id>`** columns (multi–one-hot)
 
-**The trap**: "Set Gordon = 0, Lindfield = 1." This tells the model Lindfield is "greater than" Gordon, and that the gap between them is exactly 1. That ordering is fiction.
+**The trap:** feeding a single categorical integer (Gordon=`0`, Lindfield=`1`, …)
+implies a bogus ordering unless you deliberately choose an ordinal encoding.
 
-**The fix**: One-hot encoding gives each category its own 0/1 column:
+**The implementation:** Allocate one binary column per seeded TfNSW facility
+(`FEATURE_COLUMNS` in `features.py`; names like `park__tfnsw_gordon`,
+`park__tfnsw_facility_25`, … — **exactly one** column is hot per row).
 
-| Car Park | is_gordon | is_lindfield |
-|----------|-----------|--------------|
-| Gordon | 1.0 | 0.0 |
-| Lindfield | 0.0 | 1.0 |
+| Car park id | … | park__tfnsw_gordon | … | park__tfnsw_lindfield | … |
+|-------------|---|---------------------|---|-------------------------|---|
+| `tfnsw_gordon` | … | **1.0** | … | 0.0 | … |
 
-No fake ordering. The model can learn a separate behavior for each car park (Gordon has 213 spots and a heavier commuter peak; Lindfield has 94).
+This lets one **shared XGBoost regressor** ingest calendar + lag features common to all sites while still allocating capacity to learn distinct utilisation curves. When a TfNSW car park lacks history, pooled patterns still help once enough cross-site samples exist — but per-site residuals may stay high until that site collects data.
 
 ### 4c. Boolean Flags — `is_weekend`, `is_public_holiday`
 
@@ -177,15 +179,15 @@ For each hour we look backwards into the same dictionary. The `.get(key, cp_mean
 
 After all that, `build_training_frame` returns a clean table. One example row:
 
-| hour_sin | hour_cos | dow_sin | dow_cos | is_weekend | is_holiday | is_gordon | is_lindfield | lag_24h | lag_168h | **target** |
-|----------|----------|---------|---------|------------|------------|-----------|--------------|---------|----------|------------|
-| -1.0 | 0.0 | 0.43 | -0.90 | 0 | 0 | 1 | 0 | 0.88 | 0.91 | **0.86** |
+| hour_sin | hour_cos | dow_sin | dow_cos | … | `park__tfnsw_*` columns (one-hot) … | lag_24h | lag_168h | **target** |
+|----------|----------|---------|---------|---|----------------------------------------|---------|----------|------------|
+| -1.0 | 0.0 | 0.43 | -0.90 | … | Exactly one **`1.0`** (here: Gordon), rest `0` | 0.88 | 0.91 | **0.86** |
 
 **Read it as a sentence:**
 
-> "At 6pm (hour_sin/cos), on a Friday (dow_sin/cos), not a weekend or holiday, at Gordon, where it was 88% full yesterday at 6pm and 91% full last Friday at 6pm — it turned out to be **86% full**."
+> "At 6pm (hour_sin/cos), on a Friday (dow_sin/cos), not a weekend or holiday, at **whatever site that one-hot selects**, where it was 88% full yesterday at 6pm and 91% full last Friday at 6pm — it turned out to be **86% full**."
 
-That last column, `target`, is the answer. The other 10 are **X**. 5,310 rows like this is your training dataset. The model's job: learn the pattern connecting the 10 numbers to the answer, well enough to fill in the answer for an hour it has never seen.
+That last column, `target`, is the answer. Everything to its left — apart from bookkeeping columns like timestamps — are **X**. Thousands of pooled rows spanning every TfNSW facility are ideal; the bundled XGBoost model learns correlations shared across commuter sites while letting the `park__…` split carve out facility-specific biases.
 
 ---
 
@@ -226,8 +228,7 @@ That `.fit()` call is the training. XGBoost is **gradient-boosted decision trees
 | **Boosting** | Build trees in sequence, each one trained to fix the leftover errors of all the trees before it. Tree 1 makes a crude guess. Tree 2 doesn't re-predict occupancy — it predicts *"how wrong was tree 1?"* and corrects it. Tree 3 corrects what's still wrong. Repeat 200 times (`n_estimators=200`). |
 | **Learning rate** | `learning_rate=0.05` means each tree's correction is only partly applied — small, cautious steps. Slower, but it avoids overshooting and overfitting. |
 
-The final model is the **sum of all 200 trees**. Together they approximate the function `f(10 features) → occupancy` far better than any single tree. Nothing is "programmed" — the tree questions and thresholds are all discovered from your 5,024 rows.
-
+The final model is the **sum of all 200 trees**. Together they approximate the function mapping the **calendar + lag + facility** vector → occupancy fraction, far better than any single shallow tree would. Nothing is "programmed" — the split questions/thresholds are learned from whichever hourly rows landed in `build_training_frame` after TfNSW collection.
 ---
 
 ## Module 8 — The Second Model: Predicting Confidence
@@ -251,16 +252,35 @@ Because errors aren't uniform. The model is rock-solid at 3am (always empty, eas
 - *"87% full, **high confidence**"* vs.
 - *"87% full, **low confidence**"*
 
-**Confidence calculation:**
+**Confidence calculation at inference** (`predictor.py`):
 
 ```python
-confidence = 1.0 - clip(predicted_residual / max_residual, 0, 1)
+resid = float(bundle["residual_model"].predict(X)[0])   # predicted typical |error| for rows like this
+max_resid = bundle["max_residual"] or 1.0              # max(|y_train - occ_model.predict|), from training
+confidence = 1.0 - min(max(resid / max_resid, 0.0), 1.0)
 ```
 
-- Big expected error → low confidence
-- Small expected error → high confidence
+So **confidence = 1 − (predicted absolute error / worst-case training error)**, clamped to **[0, 1]**.
 
-> 📝 `max_residual = 1.55` from the dirty rows is why this scaling is a bit loose — clean the target and it tightens.
+- **Large** predicted residual (this situation is like the messy parts of training) → ratio → **1**, confidence **low**.
+- **Small** predicted residual → ratio ≈ **0**, confidence **near 1**.
+
+### Why the number often looks “too high” (e.g. 0.9+) — read this carefully
+
+**This is not a calibrated probability.** It does **not** mean “there is a 93% chance the lot is within X% of this forecast.” It is a **heuristic** tied to training error and a **generous normalizer**.
+
+| Mechanism | Effect |
+|-----------|--------|
+| **`max_residual` is the *maximum* absolute error on training rows** | A few bad rows (sensor glitches, impossible occupancy vs capacity, etc.) push `max_residual` up — **your `eval_report.md` might show ~1.5+ on a 0–1 occupancy scale**. Everything is divided by that large number. |
+| **Typical predicted residuals are moderate** | For “ordinary” feature vectors the second model often predicts something like **0.08–0.15** on the occupancy-fraction scale — small **compared to** a 1.5 max, so **1 − 0.1/1.5 ≈ 0.93** — hence **very high displayed confidence** even when MAE on holdout is only “good,” not “oracle.” |
+| **Residual model trains on the same `X_train` where fit is already OK** | It learns patterns of *remaining* error after boosting; for many rows that error is **shrunk**, so predicted residuals stay **below** the extreme tail that set `max_residual`. |
+| **No holdout calibration** | We don’t map this score to measured coverage (e.g. “90% of the time the error is below 0.05 on the occupancy scale”). The UI label “High / Medium / Low” (e.g. thresholds around 0.8 / 0.5) is **relative**, not a statistical guarantee. |
+
+**How to interpret it for users:** Treat it as **“model self-consistency vs. the worst errors it saw in training”**, not **“trust this percentage point-for-point.”** The **holdout MAE** (Module 9) is closer to an **honest accuracy** statement for typical hours.
+
+**If you want softer or more honest-feeling scores later (not implemented by default):** clip dirty `occ` before fitting, use a **percentile** (e.g. p95) of `|residual|` instead of **`max`**, scale by **validation MAE**, or rename the product string to **“certainty (heuristic)”** so it isn’t read as a literal confidence interval.
+
+> 📝 Dirty training rows **inflate `max_residual`** and **implicitly inflate confidence** for normal cases. Cleaning/clipping the target (Module 2) helps both MAE and this scale.
 
 ---
 
@@ -284,26 +304,39 @@ For parking guidance, that's genuinely good. And because it's measured on held-o
 
 ---
 
-## Module 10 — Under the Hood at Prediction Time (The Lag Trap)
+## Module 10 — Under the Hood at Prediction Time (Lags & “Flat” Forecasts)
 
-One last subtlety that trips up beginners.
+**At training time**, `lag_24h` / `lag_168h` come from **`build_training_frame`**: keyed off real `(car_park_id, hour)` rows in `occupancy_history`.
 
-**At training time**, `lag_24h` was easy — yesterday already happened, the value was sitting in the table.
-
-**At prediction time** you're asking about the future — *"how full will Gordon be next Tuesday 6pm?"* There is no row for "24h before next Tuesday 6pm" because that hasn't happened either.
-
-So `predictor.py` goes and **fetches the lags from history**:
+**At prediction time** you're asking about the future — *"how full will Hornsby be next Tuesday 6pm?"* The clock times **24h / 168h before** your target mostly **have not occurred yet**. So **`predictor.py`** looks up **historic** occupancy around those anchors:
 
 ```python
 lag_24h  = _lag_occupancy(db_path, car_park_id, target_dt - timedelta(hours=24),  mean)
 lag_168h = _lag_occupancy(db_path, car_park_id, target_dt - timedelta(hours=168), mean)
 ```
 
-`_lag_occupancy` queries `occupancy_history` for the nearest reading within ±90 minutes of that earlier moment. If nothing is there, it falls back to the training mean (stored in the model bundle).
+`_lag_occupancy` (**per facility**, not pooled) resolves in tiers:
 
-> 💡 **Why no `lag_1h`?** For a prediction 5 days out, "1 hour before" is still in the future and genuinely unknowable, but "same hour last week" is comfortably in the past.
+1. **±90 min** of nominal — nearest row (matches tight sensor-ish sampling where it exists).
+2. If empty: **±72 h** around nominal — nearest row (**stops sparse sites from collapsing to one global fallback** — see caution below).
+3. If still empty: **most recent snapshot on or before nominal**, up to **180 days** back.
+4. Only then: the bundle’s **`train_mean_occupancy`** (training-set global mean).
 
-The 10 fetched/computed features go into a one-row DataFrame, both models run, and you get back the prediction dict with `model_version: "xgboost-v1"`.
+Older behaviour used only ±90 min then jumped straight to the **same global mean for both** lags whenever a facility had gaps. Combined with hourly features, tens of commuter sites landed on **almost the same predicted %** despite different `park__…` one-hots. **Version note (2026-05):** widened tiers + facility-specific stale prior fix that pathology.
+
+### Production gotcha — `simulator-v1` on TfNSW
+
+If **`occupancy_v1.pkl` is absent** from the runtime, TfNSW falls back to **`prediction_service`**’s stub: **`capacity // 2` → exactly 50% full for every TfNSW car park.** The map then looks “broken” — all Park&Rides at the **same rounded percentage.** Fix: bundle the artefact (`models/occupancy_v1.pkl`) into the Docker image or copy it beside the DB; confirm responses show **`model_version: "xgboost-v1"`**.
+
+### API lookup gotcha — pass stable IDs from the SPA
+
+`/api/predict?location=` is resolved through **`find_car_park`** (exact id/name, then fuzzy). Very loose fuzzy match could map junk text to Gordon. **Prefer `OccupancyResponse.car_park_id`** as **`location`** (e.g. `tfnsw_facility_25`) from the parity batch of predict calls.**Version note:** the React hook fans out with **`car_park_id`**, not display name (`Park&Ride` strings with **`&`** are uglier via query params).
+
+### Why still no `lag_1h`?
+
+For a horizon days ahead, “one hour before the target instant” often **hasn’t happened**; “same-ish time last week” is usually in-history and supports **`lag_168h`**.
+
+The feature vector at inference matches the **`feature_columns`** list inside **`occupancy_v1.pkl`**; both XGBoost heads consume that layout; output carries **`model_version: "xgboost-v1"`** when ML runs.
 
 ---
 
@@ -315,7 +348,7 @@ TfNSW API
 collect_history.py     → raw rows → occupancy_history table
   ↓
 build_training_frame   → target (1−avail/total), hourly buckets,
-                         cyclical time, one-hot, holiday flags, lags
+                         cyclical time, weekend/holiday flags, `park__…` dummies, lags
   ↓
 chronological split    → older = train (5024) · last 7 days = validation (286)
   ↓
@@ -327,7 +360,7 @@ MAE on validation      → 0.031 — honest 3pp accuracy on unseen data
   ↓
 pickle bundle          → models/occupancy_v1.pkl
   ↓
-predictor.py           → fetch lags from history → predict the future
+predictor.py           → per-site lag lookup (±90m → ±72h → recent history) → predict
 ```
 
 ---
@@ -343,6 +376,7 @@ The `.fit()` call is one line. Beginners obsess over the algorithm; **engineers 
 ## Going Deeper
 
 Want to explore more? Consider:
+- Module 10 — inference lags · Module 8 — **confidence is heuristic, often high numerically**.
 - A hand-traced single decision tree
 - The math of cyclical encoding
 - How to clean that `max_residual` bug and retrain

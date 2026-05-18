@@ -1,8 +1,12 @@
-"""Train the TfNSW occupancy model + residual confidence model.
+"""Train occupancy regressors (XGBoost) + residual model for confidence.
 
 Run:  python -m app.ml.train
-Reads real history from occupancy_history, fits two XGBoost regressors, and
-writes models/occupancy_v1.pkl + models/eval_report.md.
+
+Loads ``occupancy_history`` for **all** seeded car parks, builds the fixed site-agnostic
+feature frame (see ``features.py``), fits two regressors, and writes
+``models/occupancy_v1.pkl`` + ``models/eval_report.md``.
+
+Older pickles using per-facility ``park__…`` columns must be regenerated.
 """
 import argparse
 import logging
@@ -15,13 +19,13 @@ import pandas as pd
 from xgboost import XGBRegressor
 
 from app.config import settings as _settings
+from app.data.seed_car_parks import ALL_CAR_PARKS
 from app.db import get_connection
-from app.ml.features import FEATURE_COLUMNS, TFNSW_CAR_PARK_IDS, build_training_frame
+from app.ml.features import FEATURE_COLUMNS, build_training_frame
 
 log = logging.getLogger(__name__)
 
 MODEL_VERSION = "xgboost-v1"
-_MIN_TRAINING_ROWS = 200
 
 _XGB_PARAMS = dict(
     n_estimators=200,
@@ -32,14 +36,21 @@ _XGB_PARAMS = dict(
     random_state=42,
 )
 
+_MIN_TRAINING_ROWS = 500
+
+
+def _all_seeded_car_park_ids() -> list[str]:
+    return [cp.id for cp in ALL_CAR_PARKS]
+
 
 def _load_history(db_path: Path) -> list[dict]:
-    placeholders = ",".join("?" for _ in TFNSW_CAR_PARK_IDS)
+    ids = _all_seeded_car_park_ids()
+    placeholders = ",".join("?" for _ in ids)
     with get_connection(db_path) as con:
         rows = con.execute(
             f"SELECT car_park_id, ts, available, total_spots FROM occupancy_history "
             f"WHERE car_park_id IN ({placeholders})",
-            TFNSW_CAR_PARK_IDS,
+            ids,
         ).fetchall()
     return [dict(r) for r in rows]
 
@@ -52,7 +63,8 @@ def train(
     if len(frame) < _MIN_TRAINING_ROWS:
         raise RuntimeError(
             f"Only {len(frame)} training rows (need >= {_MIN_TRAINING_ROWS}). "
-            "Collect more TfNSW history before training."
+            "Run TfNSW history collection (e.g. `python -m app.ml.collect_history --days 120`), "
+            "ensure simulated history backfill ran, then retrain."
         )
 
     cutoff = frame["ts"].max() - pd.Timedelta(days=holdout_days)
@@ -63,6 +75,16 @@ def train(
             f"Only {len(train_df)} rows left after the {holdout_days}-day holdout "
             f"(need >= {_MIN_TRAINING_ROWS})."
         )
+
+    cp_meta = {cp.id: cp for cp in ALL_CAR_PARKS}
+    vt_series = train_df["car_park_id"].map(lambda x: cp_meta[x].venue_type)
+    global_mean = float(train_df["target"].mean())
+    commuter_tgt = train_df.loc[vt_series == "commuter", "target"]
+    retail_tgt = train_df.loc[vt_series == "retail", "target"]
+    type_mean_occupancy = {
+        "commuter": float(commuter_tgt.mean()) if len(commuter_tgt) else global_mean,
+        "retail": float(retail_tgt.mean()) if len(retail_tgt) else global_mean,
+    }
 
     X_train = train_df[FEATURE_COLUMNS]
     y_train = train_df["target"].to_numpy()
@@ -86,6 +108,7 @@ def train(
         "residual_model": resid_model,
         "feature_columns": FEATURE_COLUMNS,
         "train_mean_occupancy": float(y_train.mean()),
+        "type_mean_occupancy": type_mean_occupancy,
         "max_residual": max_residual,
         "model_version": MODEL_VERSION,
         "trained_at": datetime.now(timezone.utc).isoformat(),
@@ -101,6 +124,10 @@ def train(
     report_out.write_text(
         "# Occupancy Model Evaluation\n\n"
         f"- Model version: {MODEL_VERSION}\n"
+        f"- Regression target: hourly mean occupancy fraction (1 − available/total)\n"
+        f"- Feature schema: site-agnostic ({len(FEATURE_COLUMNS)} columns)\n"
+        f"- Per-type cold-start means (train): commuter={type_mean_occupancy['commuter']:.4f}, "
+        f"retail={type_mean_occupancy['retail']:.4f}\n"
         f"- Trained at: {bundle['trained_at']}\n"
         f"- Training rows: {bundle['n_train']}\n"
         f"- Validation rows: {bundle['n_val']}\n"
@@ -113,7 +140,7 @@ def train(
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
-    parser = argparse.ArgumentParser(description="Train the TfNSW occupancy model.")
+    parser = argparse.ArgumentParser(description="Train the ParkSmart occupancy model.")
     parser.add_argument("--holdout-days", type=int, default=7)
     args = parser.parse_args()
 

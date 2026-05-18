@@ -1,5 +1,13 @@
 from datetime import datetime
-from app.services.simulator import simulated_available, BASELINES, SIM_CAR_PARK_IDS
+
+import pytest
+
+from app.services.simulator import (
+    BASELINES,
+    SIM_CAR_PARK_IDS,
+    simulated_available,
+    tfnsw_ml_fallback_occupancy_fraction,
+)
 
 
 def test_all_sim_ids_covered():
@@ -48,6 +56,22 @@ def test_commuter_park_busier_on_weekday_morning():
 
 
 def test_unknown_car_park_raises():
-    import pytest
     with pytest.raises(KeyError):
         simulated_available("not_a_car_park", datetime(2026, 5, 15, 13, 0))
+
+
+def test_tfnsw_fallback_fraction_deterministic():
+    dt = datetime(2026, 5, 15, 13, 0, 0)
+    a = tfnsw_ml_fallback_occupancy_fraction("tfnsw_facility_8", dt)
+    b = tfnsw_ml_fallback_occupancy_fraction("tfnsw_facility_8", dt)
+    assert a == b
+    assert 0.03 <= a <= 0.97
+
+
+def test_tfnsw_fallback_differs_by_facility_and_hour():
+    dt = datetime(2026, 5, 13, 8, 0, 0)
+    fa = tfnsw_ml_fallback_occupancy_fraction("tfnsw_facility_8", dt)
+    fb = tfnsw_ml_fallback_occupancy_fraction("tfnsw_facility_25", dt)
+    night = tfnsw_ml_fallback_occupancy_fraction("tfnsw_facility_8", datetime(2026, 5, 13, 3, 0, 0))
+    assert fa != pytest.approx(fb, abs=1e-9)
+    assert night != pytest.approx(fa, abs=1e-3)

@@ -1,5 +1,6 @@
 from datetime import date
 from app.config import Settings
+from app.data.seed_car_parks import TFNSW_CAR_PARKS
 from app.db import get_connection
 from app.ml.collect_history import collect_history
 
@@ -9,9 +10,10 @@ def test_collect_history_inserts_rows(seeded_db):
     stats = collect_history(
         seeded_db, settings, days=3, today=date(2026, 5, 20), fixture_name="history_sample"
     )
-    assert stats["rows_inserted"] == 6  # 3 per car park (fixed fixture timestamps)
-    assert stats["by_car_park"]["tfnsw_gordon"] == 3
-    assert stats["by_car_park"]["tfnsw_lindfield"] == 3
+    n_tf = len(TFNSW_CAR_PARKS)
+    assert stats["rows_inserted"] == n_tf * 3  # 3 hourly rows per park (shared fixture)
+    for cp in TFNSW_CAR_PARKS:
+        assert stats["by_car_park"][cp.id] == 3
 
 
 def test_collect_history_writes_tfnsw_car_park_ids(seeded_db):
@@ -25,7 +27,7 @@ def test_collect_history_writes_tfnsw_car_park_ids(seeded_db):
             "WHERE car_park_id LIKE 'tfnsw_%'"
         ).fetchall()
     ids = {r["car_park_id"] for r in rows}
-    assert ids == {"tfnsw_gordon", "tfnsw_lindfield"}
+    assert ids == {cp.id for cp in TFNSW_CAR_PARKS}
 
 
 def test_collect_history_is_idempotent(seeded_db):

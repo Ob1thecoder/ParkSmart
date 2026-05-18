@@ -6,16 +6,28 @@ The API covers commuter Park&Ride facilities; the nearest North Shore entries
 are Gordon (#6) and Lindfield (#34).
 
 Consequence:
-  - All 5 Chatswood CBD car parks are source="simulated".
+  - All Chatswood CBD and nearby retail car parks in this app are source="simulated".
   - Gordon is seeded as source="tfnsw" and used for:
       a) A live real-data marker on the map (labelled, ~3km from Chatswood CBD)
       b) ML model training data via get_history() (commuter pattern proxy)
 
 The TfNSW facility_id values match the 'facility_id' field in the API response
-(a simple integer string, e.g. "6"), NOT the TSN or tfnsw_facility_id composite.
+(a simple integer string, e.g. "6"), NOT the composite `tfnsw_facility_id` TPR code.
+
+Full facility list sourced from TfNSW Car Parks documentation (`app.data.tfnsw_facility_seed`).
+The occupancy model is **site-agnostic** (fixed feature schema): all seeded car parks can
+contribute rows from ``occupancy_history``; ``venue_type`` + capacity encode generic context.
 """
 from app.models import CarPark
 from app.db import get_connection
+
+from app.data.tfnsw_facility_seed import (
+    TFNSW_LEGACY_ADDRESS_OVERRIDES,
+    TFNSW_LEGACY_IDS,
+    TFNSW_LEGACY_NAME_OVERRIDES,
+    TFNSW_SEED_ROWS,
+    slug_address,
+)
 
 # Chatswood CBD car parks — all simulated (not in TfNSW feed)
 CHATSWOOD_CAR_PARKS: list[CarPark] = [
@@ -27,6 +39,7 @@ CHATSWOOD_CAR_PARKS: list[CarPark] = [
         suburb="Chatswood",
         address="1 Anderson Street, Chatswood NSW 2067",
         source="simulated",
+        venue_type="retail",
         total_spots=1400,
     ),
     CarPark(
@@ -37,6 +50,7 @@ CHATSWOOD_CAR_PARKS: list[CarPark] = [
         suburb="Chatswood",
         address="345 Victoria Avenue, Chatswood NSW 2067",
         source="simulated",
+        venue_type="retail",
         total_spots=850,
     ),
     CarPark(
@@ -47,6 +61,7 @@ CHATSWOOD_CAR_PARKS: list[CarPark] = [
         suburb="Chatswood",
         address="1 Albert Avenue, Chatswood NSW 2067",
         source="simulated",
+        venue_type="retail",
         total_spots=280,
     ),
     CarPark(
@@ -57,6 +72,7 @@ CHATSWOOD_CAR_PARKS: list[CarPark] = [
         suburb="Chatswood",
         address="Victoria Avenue, Chatswood NSW 2067",
         source="simulated",
+        venue_type="commuter",
         total_spots=160,
     ),
     CarPark(
@@ -67,35 +83,70 @@ CHATSWOOD_CAR_PARKS: list[CarPark] = [
         suburb="Chatswood",
         address="Help Street, Chatswood NSW 2067",
         source="simulated",
+        venue_type="retail",
         total_spots=320,
+    ),
+    # Extra North Shore commuter / retail garages (TfNSW does not expose them on the carpark feed)
+    CarPark(
+        id="sim_artarmon_hampden",
+        name="Artarmon Hampden Shops",
+        lat=-33.8102,
+        lon=151.1554,
+        suburb="Artarmon",
+        address="Hampden Road, Artarmon NSW 2064",
+        source="simulated",
+        venue_type="commuter",
+        total_spots=210,
+    ),
+    CarPark(
+        id="sim_st_leonards_plaza",
+        name="St Leonards Railway Plaza Parking",
+        lat=-33.8225,
+        lon=151.1942,
+        suburb="St Leonards",
+        address="Railway Crescent, St Leonards NSW 2065",
+        source="simulated",
+        venue_type="commuter",
+        total_spots=340,
+    ),
+    CarPark(
+        id="sim_roseville_royal_st",
+        name="Royal Street Roseville Parking",
+        lat=-33.7843,
+        lon=151.1871,
+        suburb="Roseville",
+        address="Royal Street, Roseville NSW 2069",
+        source="simulated",
+        venue_type="commuter",
+        total_spots=140,
     ),
 ]
 
-# Real TfNSW facilities — used for live data display and ML training.
-TFNSW_CAR_PARKS: list[CarPark] = [
-    CarPark(
-        id="tfnsw_gordon",
-        name="Park&Ride - Gordon",
-        lat=-33.756009,
-        lon=151.154528,
-        suburb="Gordon",
-        address="Henry Street, Gordon NSW 2072",
-        source="tfnsw",
-        tfnsw_facility_id="6",
-        total_spots=213,
-    ),
-    CarPark(
-        id="tfnsw_lindfield",
-        name="Park&Ride - Lindfield",
-        lat=-33.775185,
-        lon=151.169111,
-        suburb="Lindfield",
-        address="Village Green, Lindfield NSW 2070",
-        source="tfnsw",
-        tfnsw_facility_id="34",
-        total_spots=94,
-    ),
-]
+def _build_tfnsw_car_parks() -> list[CarPark]:
+    out: list[CarPark] = []
+    for fid, name, lat, lon, suburb, spots in TFNSW_SEED_ROWS:
+        pk = TFNSW_LEGACY_IDS.get(fid) or f"tfnsw_facility_{fid}"
+        display_name = TFNSW_LEGACY_NAME_OVERRIDES.get(fid, name)
+        address = TFNSW_LEGACY_ADDRESS_OVERRIDES.get(fid, slug_address(display_name, suburb))
+        out.append(
+            CarPark(
+                id=pk,
+                name=display_name,
+                lat=lat,
+                lon=lon,
+                suburb=suburb,
+                address=address,
+                source="tfnsw",
+                tfnsw_facility_id=fid,
+                venue_type="commuter",
+                total_spots=spots,
+            )
+        )
+    return out
+
+
+# Real TfNSW facilities — live data display + contribute rows to site-agnostic ML training.
+TFNSW_CAR_PARKS: list[CarPark] = _build_tfnsw_car_parks()
 
 ALL_CAR_PARKS: list[CarPark] = CHATSWOOD_CAR_PARKS + TFNSW_CAR_PARKS
 

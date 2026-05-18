@@ -13,10 +13,10 @@ def _make_settings(seeded_db: Path) -> Settings:
 
 # --- get_all_occupancy ---
 
-def test_get_all_occupancy_returns_seven_car_parks(seeded_db):
+def test_get_all_occupancy_returns_all_car_parks(seeded_db):
     settings = _make_settings(seeded_db)
     result = occupancy_service.get_all_occupancy(seeded_db, settings)
-    assert len(result) == 7  # 5 sim + 2 tfnsw
+    assert len(result) == 52  # 8 sim + 44 tfnsw
 
 
 def test_get_all_occupancy_response_shape(seeded_db):
@@ -69,6 +69,11 @@ def test_find_car_park_no_match_returns_candidates():
     assert len(candidates) > 0
 
 
+def test_find_car_park_gibberish_does_not_match_random_tfnsw():
+    cp, _ = occupancy_service.find_car_park("TfNSW bogus nonsense")
+    assert cp is None
+
+
 # --- get_live_occupancy_tool ---
 
 def test_get_live_occupancy_tool_success(seeded_db):
@@ -97,7 +102,7 @@ def test_refresh_sim_writes_occupancy_history(seeded_db):
         rows = con.execute(
             "SELECT count(*) as n FROM occupancy_history WHERE ts LIKE '2026-05-11T14%'"
         ).fetchone()
-    assert rows["n"] == 5  # one row per sim car park
+    assert rows["n"] == 8  # one row per sim car park
 
 
 def test_refresh_sim_is_idempotent(seeded_db):
@@ -120,5 +125,5 @@ def test_backfill_inserts_rows_for_all_sim_parks(seeded_db):
         count = con.execute(
             "SELECT count(*) as n FROM occupancy_history"
         ).fetchone()["n"]
-    # 5 sim parks × 2 days × 24 hours = 240 rows
-    assert count == 240
+    # 8 sim parks × 2 days × 24 hours = 384 rows
+    assert count == 384

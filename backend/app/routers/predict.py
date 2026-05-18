@@ -7,7 +7,7 @@ router = APIRouter()
 
 @router.get("/predict")
 def predict(
-    location: str = Query(..., description="Car park name or nearby landmark"),
+    location: str = Query(..., description="Car park id (recommended) or name / landmark"),
     target_datetime: str = Query(..., description="ISO8601 datetime, within next 7 days"),
     settings: Settings = Depends(get_settings),
 ) -> dict:

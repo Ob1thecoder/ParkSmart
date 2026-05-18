@@ -31,8 +31,8 @@ Plan files: `docs/superpowers/plans/`
 | Area | Decision |
 |---|---|
 | Live data | All 5 Chatswood CBD car parks are `source=simulated` (not in TfNSW feed). Real TfNSW: Gordon (`facility_id="6"`) + Lindfield (`facility_id="34"`). |
-| ML training | Real TfNSW history for Gordon and Lindfield only. No synthetic data in the training set. |
-| Prediction | 7-day horizon, hourly resolution. Simulated car parks use the estimation model; TfNSW parks use XGBoost (Plan 3+). |
+| ML training | All **seeded TfNSW** `car_park_id`s with history contribute; **`park__…` one-hot** features (**see `features.py`**). Operational notes: **`docs/ML_TRAINING_GUIDE.md`** §Module 10 (flat predictions, **`simulator-v1`** = missing `.pkl`, lag lookup). **`docs/DEPLOYMENT.md`** §TfNSW occupancy model. |
+| Prediction | 7-day horizon, hourly resolution. Simulated garages → pattern model; TfNSW → **XGBoost when `occupancy_v1.pkl` present**, else fallback **exact 50%** per site (`simulator-v1`). Frontend batch → **`car_park_id`** as **`/api/predict?location=`**. |
 | LLM | `gpt-4o-mini` (OpenAI) |
 | UI | Single page: full-bleed Leaflet map + 380px right chat drawer |
 | Transparency | `source: "simulated"` propagates through every layer. LLM labels estimates as "estimated". Frontend shows a visual badge. |

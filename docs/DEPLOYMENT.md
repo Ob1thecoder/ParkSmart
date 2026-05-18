@@ -248,6 +248,31 @@ sqlite3 /data/parksmart.db "PRAGMA integrity_check;"
 
 ---
 
+## TfNSW occupancy model (training / refresh)
+
+The API serves predictions when **`backend/models/occupancy_v1.pkl`** is bundled with the image (or copied onto the Fly volume **and** wired via `WORKDIR`/`PYTHONPATH` — today the Dockerfile does **not** copy `models/`; predictions fall back unless you add it).
+
+Operational loop on a workstation with **`TFNSW_API_KEY`** and a recent DB dump (or SSH + `/data/parksmart.db`):
+
+```bash
+cd backend
+python -m app.ml.collect_history --days 120   # one row-set per seeded TfNSW id
+python -m app.ml.train                        # emits models/occupancy_v1.pkl + eval_report.md
+```
+
+Retrain whenever `features.py`'s **`FEATURE_COLUMNS`** changes (pickles are incompatible across layouts).
+
+### Verifying predictions aren’t “flat”
+
+| What you see | Meaning |
+|----------------|--------|
+| TfNSW markers all **~50% full**, badge **Estimated · typical patterns** (`simulator-v1`) | **No `occupancy_v1.pkl`** in the running container — ML never runs. Ship the artefact (extend Dockerfile with `COPY backend/models/ …` or bake into image in CI). |
+| TfNSW pins **same %** with **`xgboost-v1`** | Usually **missing per-site history near lag anchors** — backend widens lag lookup (±72 h, last-known row). If it persists, run **`collect_history`** more days and redeploy DB + retrain. |
+
+Map batching should call **`/api/predict?location=<car_park_id>`** for each park (see `docs/ML_TRAINING_GUIDE.md` Module 10).
+
+---
+
 ## Rolling Back
 
 ### Backend Rollback

@@ -40,7 +40,7 @@ def test_occupancy_returns_list(client):
     assert resp.status_code == 200
     data = resp.json()
     assert isinstance(data, list)
-    assert len(data) == 7
+    assert len(data) == 52  # 8 sim + 44 tfnsw (see tfnsw_facility_seed)
 
 
 def test_occupancy_response_shape(client):

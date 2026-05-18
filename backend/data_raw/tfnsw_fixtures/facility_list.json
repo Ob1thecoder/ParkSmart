@@ -1,5 +1,178 @@
 [
-  { "facility_id": "6",  "facility_name": "Park&Ride - Gordon Henry St (north)" },
-  { "facility_id": "25", "facility_name": "Park&Ride - Hornsby" },
-  { "facility_id": "34", "facility_name": "Park&Ride - Lindfield Village Green" }
+  {
+    "facility_id": "1",
+    "facility_name": "Tallawong Station Car Park (Historical Only)"
+  },
+  {
+    "facility_id": "2",
+    "facility_name": "Kellyville Station Car Park (Historical Only)"
+  },
+  {
+    "facility_id": "3",
+    "facility_name": "Bella Vista Station Car Park (Historical Only)"
+  },
+  {
+    "facility_id": "4",
+    "facility_name": "Hills Showground Station Car Park (Historical Only)"
+  },
+  {
+    "facility_id": "5",
+    "facility_name": "Cherrybrook Station Car Park (Historical Only)"
+  },
+  {
+    "facility_id": "6",
+    "facility_name": "Park&Ride - Gordon"
+  },
+  {
+    "facility_id": "7",
+    "facility_name": "Park&Ride - Kiama"
+  },
+  {
+    "facility_id": "8",
+    "facility_name": "Park&Ride - Gosford"
+  },
+  {
+    "facility_id": "9",
+    "facility_name": "Park&Ride - Revesby"
+  },
+  {
+    "facility_id": "10",
+    "facility_name": "Park&Ride - Warriewood"
+  },
+  {
+    "facility_id": "11",
+    "facility_name": "Park&Ride - Narrabeen"
+  },
+  {
+    "facility_id": "12",
+    "facility_name": "Park&Ride - Mona Vale"
+  },
+  {
+    "facility_id": "13",
+    "facility_name": "Park&Ride - Dee Why"
+  },
+  {
+    "facility_id": "14",
+    "facility_name": "Park&Ride - West Ryde"
+  },
+  {
+    "facility_id": "15",
+    "facility_name": "Park&Ride - Sutherland East Parade"
+  },
+  {
+    "facility_id": "16",
+    "facility_name": "Park&Ride - Leppington"
+  },
+  {
+    "facility_id": "17",
+    "facility_name": "Park&Ride - Edmondson Park (south)"
+  },
+  {
+    "facility_id": "18",
+    "facility_name": "Park&Ride - St Marys"
+  },
+  {
+    "facility_id": "19",
+    "facility_name": "Park&Ride - Campbelltown Farrow Rd (north)"
+  },
+  {
+    "facility_id": "20",
+    "facility_name": "Park&Ride - Campbelltown Hurley St"
+  },
+  {
+    "facility_id": "21",
+    "facility_name": "Park&Ride - Penrith (at-grade)"
+  },
+  {
+    "facility_id": "22",
+    "facility_name": "Park&Ride - Penrith (multi-level)"
+  },
+  {
+    "facility_id": "23",
+    "facility_name": "Park&Ride - Warwick Farm"
+  },
+  {
+    "facility_id": "24",
+    "facility_name": "Park&Ride - Schofields"
+  },
+  {
+    "facility_id": "25",
+    "facility_name": "Park&Ride - Hornsby"
+  },
+  {
+    "facility_id": "26",
+    "facility_name": "Park&Ride - Tallawong P1"
+  },
+  {
+    "facility_id": "27",
+    "facility_name": "Park&Ride - Tallawong P2"
+  },
+  {
+    "facility_id": "28",
+    "facility_name": "Park&Ride - Tallawong P3"
+  },
+  {
+    "facility_id": "29",
+    "facility_name": "Park&Ride - Kellyville (north)"
+  },
+  {
+    "facility_id": "30",
+    "facility_name": "Park&Ride - Kellyville (south)"
+  },
+  {
+    "facility_id": "31",
+    "facility_name": "Park&Ride - Bella Vista"
+  },
+  {
+    "facility_id": "32",
+    "facility_name": "Park&Ride - Hills Showground"
+  },
+  {
+    "facility_id": "33",
+    "facility_name": "Park&Ride - Cherrybrook"
+  },
+  {
+    "facility_id": "34",
+    "facility_name": "Park&Ride - Lindfield"
+  },
+  {
+    "facility_id": "35",
+    "facility_name": "Park&Ride - Beverly Hills"
+  },
+  {
+    "facility_id": "36",
+    "facility_name": "Park&Ride - Emu Plains"
+  },
+  {
+    "facility_id": "37",
+    "facility_name": "Park&Ride - Riverwood"
+  },
+  {
+    "facility_id": "38",
+    "facility_name": "Park&Ride - North Rocks"
+  },
+  {
+    "facility_id": "39",
+    "facility_name": "Park&Ride - Edmondson Park (north)"
+  },
+  {
+    "facility_id": "486",
+    "facility_name": "Park&Ride - Ashfield"
+  },
+  {
+    "facility_id": "487",
+    "facility_name": "Park&Ride - Kogarah"
+  },
+  {
+    "facility_id": "488",
+    "facility_name": "Park&Ride - Seven Hills"
+  },
+  {
+    "facility_id": "489",
+    "facility_name": "Park&Ride - Manly Vale (Parent Stop TSN)"
+  },
+  {
+    "facility_id": "490",
+    "facility_name": "Park&Ride - Brookvale"
+  }
 ]

@@ -15,20 +15,27 @@ MAX_TOOL_ITERATIONS = 5
 _MODEL = "gpt-4o-mini"
 
 SYSTEM_PROMPT = """\
-You are ParkSmart, a helpful parking assistant for Chatswood CBD, Sydney, Australia.
+You are Valet, the conversational assistant for ParkSmart (Sydney, Australia).
 
-You have three tools:
-- get_live_occupancy(location): Current occupancy for a car park near a location or landmark.
-- predict_availability(location, target_datetime): Predicted occupancy at a future time (up to 7 days). Use only when the user mentions a specific future time.
-- get_zone_restrictions(street): Parking time rules for a street in Chatswood.
+You help with:
+- **Garages / car parks on the map** — Chatswood-area lots we simulate for demos, plus **NSW TfNSW Park&Ride** sites with live sensor feeds where available.
+- **Forecasts** — future occupancy when the user names a time (ML or simulator, see tool result `model_version`).
+- **On-street rules** — sign-based restrictions we have loaded for **Willoughby / Chatswood** streets only (`get_zone_restrictions`).
 
-Behaviour rules:
-- For "where to park" queries: call get_live_occupancy first. Then predict_availability only if the user mentions a future time.
-- For "parking rules on X" queries: call get_zone_restrictions directly.
-- If a tool returns {{"error": "no_match", "candidates": [...]}}, pick the closest candidate name and retry.
-- Simulated car parks use pattern-based estimates — label them clearly as "estimated".
-- Be concise and practical. Mention walking distance context when recommending a car park.
-- Today is {date}. Sydney time is AEST (UTC+10) or AEDT (UTC+11) during daylight saving.\
+Tools:
+- get_live_occupancy(location): Latest occupancy for one car park. `location` can be a landmark, car park display name, or stable id from the app (e.g. `tfnsw_gordon`).
+- predict_availability(location, target_datetime): Occupancy prediction up to **7 days** ahead — only when they ask about a **specific future** time/date. Prefer **ISO 8601** datetimes (interpret relative phrases using Sydney local time below).
+- get_zone_restrictions(street): Time limits / no stopping for a **street name** where we have council sign data — not for multi-level garages.
+
+Behaviour:
+- "Where to park now / best spot" → call **get_live_occupancy** (you may call it more than once for different names). Add **predict_availability** only if they also ask about a future time.
+- Parking rules **on a street** → **get_zone_restrictions** directly (do not use garage occupancy tools).
+- **`no_match` with `candidates`**: choose the closest name from `candidates` and retry once.
+- **Data source**: if the tool payload indicates TfNSW / live sensors vs **simulated** / estimated, say so briefly. Simulator garage numbers are illustrative.
+- **`model_version`**: `xgboost-v1` = trained forecast; `simulator-v1` = placeholder. **`confidence`** is a model-internal heuristic, not a calibrated "percent sure" — do not over-claim precision.
+- Be concise, practical, and mention suburb / context when comparing options.
+
+Today (UTC date) is {date}. For user phrases like "Friday 3pm", resolve using **Australia/Sydney** (AEST UTC+10 or AEDT UTC+11 during daylight saving).\
 """
 
 TOOLS: list[dict] = [
@@ -37,16 +44,19 @@ TOOLS: list[dict] = [
         "function": {
             "name": "get_live_occupancy",
             "description": (
-                "Get current parking occupancy for a car park in Chatswood CBD. "
-                "Returns occupancy percentage, available spots, and whether the data is "
-                "live (from TfNSW sensors) or estimated."
+                "Get latest occupancy for one seeded car park: Chatswood-area simulated garages "
+                "and/or NSW TfNSW Park&Ride facilities. Pass display name, nearby landmark, or "
+                "stable id (e.g. tfnsw_gordon). Indicates live TfNSW data vs simulated estimate."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "location": {
                         "type": "string",
-                        "description": "Car park name or nearby landmark (e.g. 'Westfield', 'Mandarin Centre', 'Victoria Avenue')",
+                        "description": (
+                            "Car park display name, landmark, or app id (e.g. 'Westfield Chatswood', "
+                            "'Gordon station', 'tfnsw_lindfield')"
+                        ),
                     }
                 },
                 "required": ["location"],
@@ -58,19 +68,23 @@ TOOLS: list[dict] = [
         "function": {
             "name": "predict_availability",
             "description": (
-                "Predict parking availability at a specific future time (up to 7 days ahead). "
-                "Use this only when the user mentions a future time, not for current conditions."
+                "Predict garage occupancy fraction at a specific future datetime (within 7 days). "
+                "Use only when the user asks about a future time. Result includes model_version "
+                "(xgboost vs simulator) and a heuristic confidence score."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "location": {
                         "type": "string",
-                        "description": "Car park name or nearby landmark in Chatswood",
+                        "description": "Same as get_live_occupancy: garage name, landmark, or stable id",
                     },
                     "target_datetime": {
                         "type": "string",
-                        "description": "ISO 8601 datetime string, e.g. '2026-05-15T18:00:00'. Must be within 7 days.",
+                        "description": (
+                            "ISO 8601 with timezone preferred, e.g. '2026-05-15T08:00:00+10:00'. "
+                            "Must be within the next 7 days and in the future."
+                        ),
                     },
                 },
                 "required": ["location", "target_datetime"],
@@ -82,16 +96,19 @@ TOOLS: list[dict] = [
         "function": {
             "name": "get_zone_restrictions",
             "description": (
-                "Get street parking time restrictions for a street in Chatswood CBD. "
-                "Returns no-stopping zones, timed parking limits, and permit areas."
+                "Street parking restrictions from loaded council sign data (Chatswood / Willoughby "
+                "coverage as ingested — not TfNSW garages). "
+                "Returns timed limits, no stopping, permits where available."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "street": {
                         "type": "string",
-                        "description": "Street name in Chatswood CBD, e.g. 'Victoria Avenue', 'Albert Avenue'",
-                    }
+                        "description": (
+                            "Street name where we have sign data, e.g. 'Victoria Avenue', 'Albert Avenue'"
+                        ),
+                    },
                 },
                 "required": ["street"],
             },

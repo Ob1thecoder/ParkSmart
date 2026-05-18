@@ -6,11 +6,18 @@ import type {
   ZoneResponse,
 } from "./types";
 
+/** When `VITE_API_URL` is missing at build time, production bundles use this (Pages has no `/api`). */
+const DEFAULT_PUBLIC_API_BASE = "https://parksmart-api.fly.dev";
+
 function getApiBase(): string {
-  const url = import.meta.env.VITE_API_URL || "";
-  if (!url) return "";
-  if (url.startsWith("http://") || url.startsWith("https://")) return url;
-  return `https://${url}`;
+  const raw = import.meta.env.VITE_API_URL?.trim() ?? "";
+  if (raw) {
+    if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
+    return `https://${raw}`;
+  }
+  // Dev (`npm run dev`): same-origin `/api/*` goes through Vite proxy (see vite.config.ts).
+  if (import.meta.env.DEV) return "";
+  return DEFAULT_PUBLIC_API_BASE;
 }
 
 const API_BASE = getApiBase();
@@ -39,6 +46,7 @@ export async function getOccupancy(): Promise<OccupancyResponse[]> {
 }
 
 export async function getPredict(
+  /** Prefer `OccupancyResponse.car_park_id` (stable); names still work via fuzzy match */
   location: string,
   targetDatetimeIso: string,
 ): Promise<PredictionResult> {

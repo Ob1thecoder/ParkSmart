@@ -12,6 +12,8 @@ class CarPark(BaseModel):
     address: str | None = None
     source: Literal["tfnsw", "simulated"]
     tfnsw_facility_id: str | None = None
+    # From seed metadata only — not persisted on car_parks table
+    venue_type: Literal["commuter", "retail"] = "commuter"
     # Not stored in DB — computed from latest occupancy_history row
     total_spots: int = 0
 

@@ -1,6 +1,6 @@
 # ParkSmart Frontend (Plan 4) — Design Spec
 
-**Date:** 2026-05-17
+**Date:** 2026-05-17 · **Revision:** 2026-05-18 — marker/predict fan-out ~N; **`usePredictions` passes `car_park_id` into `/api/predict?location=`** (stable, avoids `&` / fuzzy errors)
 **Author:** solo developer
 **Status:** approved for implementation
 **Builds on:** `docs/superpowers/specs/2026-05-11-parksmart-design.md` (master spec)
@@ -20,8 +20,7 @@ The three user-success criteria from the master spec (§3) are the acceptance ba
    a specific named car park with occupancy %, confidence, and walking context.
 2. **Restrictions** — ask "what are the rules on Victoria Avenue?" and get a plain-English
    answer accurate enough to avoid a fine.
-3. **Live map** — see ≥5 car park markers that auto-refresh, with live data visually
-   distinct from estimated data.
+3. **Live map** — see one marker per `/api/occupancy` row (CBD estimates + TfNSW live sites) auto-refreshing, with live data visually distinct from estimated data.
 
 ---
 
@@ -35,7 +34,7 @@ spec, it is called out.
 | Primary form factor | **Mobile-first**, with a desktop re-flow | **Overrides** master spec §4 ("single page: full-bleed map + 380px right chat drawer" was desktop-only). The 380px drawer becomes the *desktop* presentation; mobile uses a bottom sheet. |
 | Prediction UI | **Time scrubber on the map** + a typed datetime input | A slider re-colours all markers for a chosen hour; a tappable time chip opens a text/`datetime-local` input for exact entry. Both bind to one shared target-time state. |
 | Zone restrictions UI | **Street search panel** + the chat assistant | A search field with street autocomplete returns per-side rule cards. The assistant answers the same questions via its existing `get_zone_restrictions` tool — no extra cost. |
-| Frontend testing | **Minimal / manual** | No frontend test suite. Correctness rests on TypeScript, a typed API client mirroring the backend models, and manual QA against the 3 success criteria. The backend's 96 tests still guard the API. |
+| Frontend testing | **Minimal / manual** | No frontend test suite. Correctness rests on TypeScript, a typed API client mirroring the backend models, and manual QA against the 3 success criteria. The backend's automated tests guard the API. |
 | State management | React Context for chat; local React state for the map | Per master spec §4 — no state library. |
 | Stack | React 18 + Vite + TypeScript + Tailwind CSS + Leaflet (`react-leaflet`) | Per master spec. |
 
@@ -77,7 +76,7 @@ vs. side drawer) and `CarParkDetail` (sheet content vs. Leaflet popup).
 ```
 App
 ├── MapView                 Leaflet map, fitted to Chatswood CBD bounds
-│   ├── CarParkMarker ×7     pin colour = occupancy %; pin style = provenance
+│   ├── CarParkMarker × N     pin colour = occupancy %; pin style = provenance
 │   └── CarParkDetail        desktop → Leaflet popup; mobile → bottom-sheet content
 ├── SearchField             street autocomplete → zone lookup
 │   └── ZoneRulesCard        per-side rule cards
@@ -93,8 +92,8 @@ App
 
 | Hook | Responsibility |
 |---|---|
-| `useOccupancy()` | Polls `GET /api/occupancy` every 5 minutes → 7 live snapshots. |
-| `usePredictions(targetTime)` | When `targetTime` is set, fans out `GET /api/predict` for the 7 car parks. |
+| `useOccupancy()` | Polls `GET /api/occupancy` every 5 minutes → one snapshot per seeded car park (`N ≥ 40` TfNSW + CBD sim garages). |
+| `usePredictions(targetTime)` | When `viewTime` is set, fans out `/api/predict` **once per occupancy row**, passing **`car_park_id` as the `location` query** (stable backend key; avoids `Park&Ride` / `&` encoding and loose name fuzzy match). |
 | `useChat()` | SSE state machine over `POST /api/chat`. |
 | `useZones(street)` | `GET /api/zones?street=` → per-side rule segments. |
 
@@ -136,16 +135,18 @@ typed fetch. `vite.config.ts` proxies `/api` → `http://localhost:8000`.
 
 | Trigger | Request | Response |
 |---|---|---|
-| Mount + 5-min timer | `GET /api/occupancy` | `OccupancyResponse[]` (7) |
-| Scrubber set to a future time | `GET /api/predict?location=&target_datetime=` ×7 | `PredictionResult` per park |
+| Mount + 5-min timer | `GET /api/occupancy` | `OccupancyResponse[]` (**N** entries) |
+| Scrubber set to a future time | `GET /api/predict?location=<car_park_id>&target_datetime=` × **N** | `PredictionResult` per park |
+
+`location` may still be human-readable names (e.g. LLM/chat); batch map calls should use **`car_park_id`** per backend spec §8 troubleshooting.
 | Street selected | `GET /api/zones?street=` | `ZoneResponse` |
 | Autocomplete list | `GET /api/zones/streets` | `string[]` (new — see §7) |
 | Message sent | `POST /api/chat` | SSE stream |
 
 ### Prediction fan-out
 
-`/api/predict` takes one `location` at a time. `usePredictions` issues **7 parallel calls**
-(`Promise.allSettled`, one per car-park name from the occupancy list). A rejected or
+`/api/predict` takes one `location` at a time. `usePredictions` issues **N parallel calls**
+(`Promise.allSettled`, once per occupancy marker / car-park name). A rejected or
 error-status park renders as "no prediction" for that marker; the rest of the map is
 unaffected. No batch endpoint — Plan 4 stays frontend-only apart from §7.
 
@@ -294,4 +295,4 @@ Each step is independently runnable against the live backend.
 Per the master spec's future-phases list: user accounts, native app, push notifications,
 multi-council data, payment/booking. Also deferred: a frontend test suite, a map layer of
 individual zone signs (the search panel covers the zone feature for the MVP), and a batch
-prediction endpoint (the 7-call fan-out is sufficient at this scale).
+prediction endpoint (parallel fan-out proportional to occupancy list length remains acceptable until a batch API ships).

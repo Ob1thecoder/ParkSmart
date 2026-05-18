@@ -45,9 +45,49 @@ BASELINES: dict[str, dict] = {
         "peak_hour": 11,
         "weekend_mult": 1.10,
     },
+    "sim_artarmon_hampden": {
+        "peak_util": 0.71,
+        "capacity": 210,
+        "peak_hour": 9,
+        "weekend_mult": 0.55,
+    },
+    "sim_st_leonards_plaza": {
+        "peak_util": 0.81,
+        "capacity": 340,
+        "peak_hour": 8,
+        "weekend_mult": 0.35,
+    },
+    "sim_roseville_royal_st": {
+        "peak_util": 0.68,
+        "capacity": 140,
+        "peak_hour": 10,
+        "weekend_mult": 0.40,
+    },
 }
 
 SIM_CAR_PARK_IDS: list[str] = list(BASELINES.keys())
+
+
+def tfnsw_ml_fallback_occupancy_fraction(car_park_id: str, dt: datetime) -> float:
+    """Occupied fraction when no ML bundle is available.
+
+    TfNSW Park&Ride sites are not in ``BASELINES``; without this they would all use
+    ``capacity // 2`` (~50%). Uses a commuter-shaped hourly curve plus deterministic
+    per-site noise so forecasts differ by facility and time until a trained model loads.
+    """
+    peak_hour = 8
+    peak_util = 0.68
+    weekend_mult = 0.45
+    hour_factor = _hour_factor(peak_hour, dt.hour)
+    dow_mult = weekend_mult if dt.weekday() >= 5 else 1.0
+    seed_str = (
+        f"tfnsw-fallback:{car_park_id}:"
+        f"{dt.replace(minute=0, second=0, microsecond=0).isoformat()}"
+    )
+    seed_int = int(hashlib.md5(seed_str.encode()).hexdigest(), 16)
+    rng = random.Random(seed_int)
+    noise = rng.uniform(-0.06, 0.06)
+    return float(max(0.03, min(0.97, peak_util * hour_factor * dow_mult + noise)))
 
 
 def _hour_factor(peak_hour: int, hour: int) -> float:

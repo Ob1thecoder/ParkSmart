@@ -11,6 +11,9 @@ from app.services.simulator import simulated_available
 
 log = logging.getLogger(__name__)
 
+# Loose fuzzy match (cutoff ~0.4) mapped unrelated phrases to TfNSW Gordon; tighter keeps typos.
+_FUZZY_MATCH_CUTOFF = 0.55
+
 _NAME_INDEX: dict[str, CarPark] = {}
 for _cp in ALL_CAR_PARKS:
     _NAME_INDEX[_cp.id.lower()] = _cp
@@ -25,7 +28,9 @@ def find_car_park(location: str) -> tuple[CarPark | None, list[str]]:
     if normalized in _NAME_INDEX:
         return _NAME_INDEX[normalized], all_names
 
-    matches = difflib.get_close_matches(normalized, _NAME_INDEX.keys(), n=1, cutoff=0.4)
+    matches = difflib.get_close_matches(
+        normalized, _NAME_INDEX.keys(), n=1, cutoff=_FUZZY_MATCH_CUTOFF
+    )
     if matches:
         return _NAME_INDEX[matches[0]], all_names
 
@@ -56,8 +61,10 @@ def get_all_occupancy(db_path: Path, settings: Settings) -> list[OccupancyRespon
                     available = total  # safe default: fully empty before first poll
                 as_of = datetime.now().isoformat()
 
+            # Clamp values to handle bad sensor data (available > total)
+            available = max(0, min(available, total))
             occupied = total - available
-            occ_pct = round(occupied / total, 4) if total > 0 else 0.0
+            occ_pct = round(max(0.0, min(1.0, occupied / total)), 4) if total > 0 else 0.0
             result.append(
                 OccupancyResponse(
                     car_park_id=cp.id,

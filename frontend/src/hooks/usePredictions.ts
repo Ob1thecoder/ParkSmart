@@ -34,7 +34,7 @@ export function usePredictions(
     setLoading(true);
     const iso = viewTime.toISOString();
 
-    Promise.allSettled(list.map((p) => getPredict(p.name, iso))).then((results) => {
+    Promise.allSettled(list.map((p) => getPredict(p.car_park_id, iso))).then((results) => {
       if (cancelled) return;
       const next: PredictionMap = {};
       list.forEach((p, i) => {

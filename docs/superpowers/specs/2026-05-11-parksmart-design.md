@@ -1,6 +1,6 @@
 # ParkSmart Chatswood — Design Spec
 
-**Date:** 2026-05-11
+**Date:** 2026-05-11 · **Revision:** 2026-05-18 — facility list, multi-site regression, **inference lag widening + predict troubleshooting + `/api/predict` id preference**
 **Author:** solo developer
 **Status:** approved for implementation
 
@@ -50,7 +50,7 @@ The product is working correctly when a real user can do all of the following wi
 
 1. **Recommendation.** Ask *"Where should I park near Westfield Chatswood at 6pm on Friday?"* and receive a specific named car park recommendation with occupancy %, confidence, and approximate walking distance — without being confused by the response.
 2. **Restrictions.** Ask *"What are the parking rules on Victoria Avenue?"* and receive a plain-English answer accurate enough to avoid a fine.
-3. **Live map.** See a map of Chatswood with at least 5 car park markers that auto-refresh, with clear visual distinction between live-data markers and estimation-based markers, so a user knows what they're looking at.
+3. **Live map.** See a map centred on Chatswood with car park markers (simulated CBD + TfNSW Park&Rides) that auto-refresh, with clear visual distinction between live TfNSW data and pattern-based estimates.
 
 ---
 
@@ -58,13 +58,13 @@ The product is working correctly when a real user can do all of the following wi
 
 | Area | Decision | Rationale |
 |---|---|---|
-| ML model | Single XGBoost occupancy regressor; penalty density as a feature if the CSV permits | Tight scope, one model one tool |
-| Live data | **All 5 Chatswood CBD car parks are simulated** (TfNSW covers Park&Ride only — no Chatswood CBD entries). Real TfNSW data: Gordon (facility_id="6") and Lindfield (facility_id="34") | Honest about data coverage |
-| ML training data | Real TfNSW history for Gordon and Lindfield only. Simulated car parks use the estimation model for predictions — no synthetic data in the ML training set | Cleaner data story |
+| ML model | **Two chained XGBoost regressors**: (1) occupancy fraction 0–1, (2) absolute residual for confidence — see §8 | Implemented in `backend/app/ml/train.py`; penalty density omitted |
+| Live data | **Chatswood CBD garages are simulated** (TfNSW has no CBD entries). **44 TfNSW Park&Ride facilities** are seeded (`app/data/tfnsw_facility_seed.py`); Gordon & Lindfield keep stable app IDs (`tfnsw_gordon`, `tfnsw_lindfield`) | Honest coverage; commuter sites are live where the API responds |
+| ML training data | **All seeded TfNSW car parks**: rows in `occupancy_history` keyed by TfNSW `car_park_id` contribute; **facility identity** encoded as binary columns (`park__<id>` per site). Simulated garages never appear in training | One model learns shared calendar effects; sparse sites rely on pooled signal until history grows |
 | Prediction window | Up to 7 days ahead, hourly resolution | Covers "Friday 6pm" without over-engineering |
 | LLM model | `claude-haiku-4-5-20251001` | Fast, cost-efficient, strong tool-calling |
 | UI layout | Single page: full-bleed Leaflet map + 380px right chat drawer | Both core features visible simultaneously |
-| DB | SQLite via stdlib `sqlite3`, no ORM | Appropriate for the current scale |
+| DB | SQLite (dev) / optional PostgreSQL (`DATABASE_URL`) via `db.py` wrapper | Persisted `/data/parksmart.db` on Fly with volume mount |
 | State | React Context for chat, local state for the map | No state library needed at this scale |
 | Backend validation | Pydantic v2 (`ConfigDict`, not `class Config`) | Matches installed library |
 
@@ -72,7 +72,7 @@ The product is working correctly when a real user can do all of the following wi
 
 - TfNSW Car Park API: `https://api.transport.nsw.gov.au/v1/carpark` — `?facility=<id>` for one facility or no query param for full list. Auth: `Authorization: apikey <TOKEN>`. `spots` and `occupancy.total` are strings. `available = int(spots) - int(occupancy.total)`.
 - Chatswood CBD car parks are NOT in the TfNSW feed.
-- Gordon (`facility_id="6"`, 213 spots) and Lindfield (`facility_id="34"`, 94 spots) are the nearest real TfNSW facilities and serve as the live-data + ML-training anchor.
+- Gordon (`facility_id="6"`) and Lindfield (`facility_id="34"`) are the closest North Shore Park&Rides to Chatswood and keep legacy stable IDs; **40+ additional TfNSW facilities** ship for map + polling (+ training once history exists).
 - KML file: `docs/willoughby_council_street_parking_signs_data.kml` — Point features (sign posts), CDATA contains `<B>key</B> = value` pairs. Fields: `rawSignId`, `signsPhotoURL`, `sign1_category` … `sign4_category`, `sign1_direction`, `sign1_description`, etc.
 - Penalty notices: audit result determines whether the feature ships (see §13).
 
@@ -85,7 +85,7 @@ The product is working correctly when a real user can do all of the following wi
 │  React SPA (Vite + Tailwind)                            │
 │  ┌──────────────────────┐  ┌────────────────────────┐   │
 │  │ Leaflet map          │  │ Chat drawer (380px)    │   │
-│  │ - 7 markers          │  │ - message list         │   │
+│  │ - N markers (API)    │  │ - message list         │   │
 │  │ - colour by % full   │  │ - input box            │   │
 │  │ - estimated badge    │  │ - tool-call indicators │   │
 │  └──────────────────────┘  └────────────────────────┘   │
@@ -110,15 +110,15 @@ The product is working correctly when a real user can do all of the following wi
    │ fixtures│   │ models  │   │ history)│  │            │
    └────────┘    └─────────┘   └─────────┘  └────────────┘
 
-Background: APScheduler polls TfNSW every 5min → occupancy_history.
-            Estimation model runs every hour for 5 CBD car parks.
+Background: APScheduler polls TfNSW full-list every 5min → occupancy_history.
+            Estimation model runs hourly for simulated CBD garages.
 ```
 
 ### Boundaries
 
 - **Service layer is pure Python** — no FastAPI imports — and unit-testable without HTTP. Each service has one job.
 - **`occupancy_service` hides the real/estimated split.** The `source` field in the response tells the caller which branch was used; the calling code doesn't branch on it.
-- **`prediction_service` routes by source**: TfNSW car parks → XGBoost (Plan 3); CBD car parks → estimation model with future timestamp.
+- **`prediction_service` routes by source**: TfNSW → `predictor.predict` **when `models/occupancy_v1.pkl` exists** and feature layout matches (`feature_columns` in bundle); otherwise **every TfNSW site falls back to exactly 50% full** (`capacity//2`, `simulator-v1`). CBD garages → deterministic simulator at future hour.
 - **No frontend state library.** React Context for chat, local state for the map.
 
 ---
@@ -169,17 +169,14 @@ CREATE INDEX IF NOT EXISTS idx_signs_street ON parking_signs(LOWER(street));
 
 ### Seeded car parks
 
-| ID | Name | Source | Spots |
-|---|---|---|---|
-| `sim_westfield` | Westfield Chatswood | simulated | 1400 |
-| `sim_chatswood_chase` | Chatswood Chase | simulated | 850 |
-| `sim_mandarin_centre` | Mandarin Centre | simulated | 280 |
-| `sim_victoria_ave_cp` | Victoria Avenue Car Park | simulated | 160 |
-| `sim_chatswood_west_cp` | Chatswood West Car Park | simulated | 320 |
-| `tfnsw_gordon` | Park&Ride - Gordon | tfnsw | 213 |
-| `tfnsw_lindfield` | Park&Ride - Lindfield | tfnsw | 94 |
+Car parks live in **`backend/app/data/seed_car_parks.py`** (+ TfNSW metadata in **`tfnsw_facility_seed.py`**):
 
-Gordon and Lindfield are used for live data display and ML training. All 5 CBD car parks are pattern-estimated.
+| Bucket | Role |
+|--------|------|
+| **8× `sim_*`** | Chatswood / North Shore garages — deterministic pattern model; `source="simulated"`. |
+| **44× TfNSW** | Park&Rides from TfNSW documentation — live polling + history; **`tfnsw_gordon`** / **`tfnsw_lindfield`** are stable aliases for API facilities **6** and **34**. Other IDs follow `tfnsw_facility_<facility_id>`. |
+
+Gordon remains the prototypical commuter anchor (~3 km north of CBD). All CBD-facing garages remain estimated.
 
 ### Curated fallback
 
@@ -236,56 +233,59 @@ get_zone_restrictions(street: str) -> {
 
 ## 8. ML pipeline
 
-### Target
+### Target (regression)
 
-`occupancy_pct = 1 - (available / total_spots)` at hour `H`, for TfNSW car parks (Gordon + Lindfield) where real historical data exists.
+Hourly occupancy **fraction**: `occupancy_frac = clip(1 − available/total_spots, 0, 1)` after aggregating readings to **`floor`** hour (`build_training_frame`).
 
 ### Features
 
-- `hour_of_day` (cyclical sin/cos encoding)
-- `day_of_week` (cyclical encoding)
-- `is_weekend` (bool)
-- `is_public_holiday` (bool — static NSW holiday list)
-- `car_park_id` (one-hot)
-- `lag_1h`, `lag_24h`, `lag_168h` — rolling occupancy from `occupancy_history`
-- `penalty_density` — if the CSV is event-level with street and timestamp: `hour_of_week → avg_penalties`. If monthly aggregate only: `lga_monthly_penalty_rate`. If unusable: feature dropped.
+- **`hour_*` / `dow_*`**: cyclic sin/cos for hour-of-day (24) and weekday (7).
+- **`is_weekend`**, **`is_public_holiday`** (NSW, `holidays` package).
+- **Facility encoding**: binary column **`park__<car_park_id>`** per seeded TfNSW site (same order as `TFNSW_CAR_PARKS`; Gordon/Lindfield use `park__tfnsw_gordon` / `park__tfnsw_lindfield`).
+- **`lag_24h`**, **`lag_168h`**: occupancy fraction at the same `(site, clock-hour)` shifted back 24h / 168h; missing buckets fall back to that site’s mean occupancy in-frame.
+- **Dropped / future**: `penalty_density` (no production feature yet).
 
-### Training (Plan 3)
+### Data collection → training
 
-1. Pull TfNSW historical data via `GET /v1/carpark` (full list) for Gordon and Lindfield.
-2. Split: last 7 days as validation holdout.
-3. Fit one XGBoost regressor across both facilities.
-4. Residual model for confidence: second XGBoost trained on residuals; confidence = `1 - clip(predicted_residual / max_residual, 0, 1)`.
-5. Save: `backend/models/occupancy_v1.pkl`, `residual_v1.pkl`, `feature_pipeline.pkl`.
-6. Generate `models/eval_report.md` with validation MAE.
+1. **Backfill history**: `python -m app.ml.collect_history --days 120` (requires `TFNSW_API_KEY`) writes `occupancy_history` rows for **every seeded TfNSW** `car_park_id`.
+2. **Train**: `python -m app.ml.train` reads those rows via `features.build_training_frame`, holds out the **last N days** (default **7**) for validation, fits **`XGBRegressor`** for mean occupancy and a second **`XGBRegressor`** on training-set absolute residuals (confidence heuristic).
+3. **Publish**: artefacts go to **`backend/models/occupancy_v1.pkl`** + **`backend/models/eval_report.md`** (gitignored bundles are copied into Docker images explicitly if needed).
+4. **Minimum samples**: training refuses to run unless enough hourly rows exist (`max(300, min(5000, 8 × (#TfNSW sites)))` guard).
 
-### Routing in `prediction_service`
+### Inference
+
+`predictor.predict` builds the same **`feature_columns`** bundle the trainer saved. It fills **`lag_24h` / `lag_168h`** by querying **`occupancy_history` for that `car_park_id`**: prefer reading within **±90 min** of nominal lag time; if absent, **±72 h** around nominal; else latest row on/before nominal (up to **180 days** back); else **`train_mean_occupancy`**. *Narrow ±90 min–only + global mean fallback used to make sparse TfNSW sites share identical lags and flatten forecasts; the wider tiers (2026-05) restore site-specific signal.*
+
+**`GET /api/predict`:** `location` may be **`car_park_id`** (preferred when batching from occupancy) or natural language; **`find_car_park`** uses exact id/name match then fuzzy match with **cutoff 0.55** to avoid spurious matches.
+
+### Inference troubleshooting (observability)
+
+| Symptom | Likely cause |
+|--------|----------------|
+| All TfNSW predictions **~50%**, `simulator-v1` | **No `occupancy_v1.pkl`** on the API host (stub path). |
+| Many TfNSW predictions **identical %** with `xgboost-v1` | **Sparse lags** collapsing to same mean (mitigated by ±72 h + per-site last-known row); re-check `occupancy_history` coverage or retrain after data grows. |
 
 ```python
 def predict_availability_tool(location, target_datetime, db_path):
+    target_dt = parse_iso8601(target_datetime)
     cp, candidates = find_car_park(location)
     if cp.source == "tfnsw":
-        return ml_model.predict(cp.id, target_dt)        # XGBoost (Plan 3+)
-    else:
-        available = simulated_available(cp.id, target_dt)
-        return {
-            "predicted_occupancy_pct": 1 - available / cp.total_spots,
-            "confidence": 0.7,
-            "model_version": "simulator-v1",
-        }
+        result = predictor.predict(cp.id, target_dt, db_path)
+        if result is not None:
+            return result
+        return estimator_fallback_for_tfnsw(cp.id, cp.name, target_dt)  # e.g. 50% occupancy
+    return simulator_prediction(cp.id, cp.name, target_dt)
 ```
 
-In Plan 2, the ML branch uses the estimation model as a placeholder for all car parks. Plan 3 replaces it for TfNSW parks.
+### Retraining
 
-### Future: retraining cadence
-
-After Plan 3, a weekly retraining job should run `train.py` and promote the new `.pkl` only if validation MAE improves. This is a post-MVP concern — not in the current implementation plans.
+Post-MVP: scheduled `collect_history` + `train` when validation MAE improves; not automated in-repo today.
 
 ---
 
 ## 9. Occupancy estimation model
 
-Used for: live and predicted occupancy of the 5 simulated CBD car parks.
+Used for: live and predicted occupancy of **all** seeded `sim_*` garages (see `seed_car_parks`).
 
 ```python
 def simulated_available(car_park_id: str, dt: datetime) -> int:
@@ -338,7 +338,7 @@ ParkSmart/
 │   │   ├── scheduler.py     # APScheduler jobs
 │   │   │
 │   │   ├── data/
-│   │   │   ├── seed_car_parks.py   # 7 car parks with lat/lon
+│   │   │   ├── seed_car_parks.py   # simulated + TfNSW facilities (~52 total rows)
 │   │   │   ├── seed_zones.json     # curated fallback rules (Victoria Avenue etc.)
 │   │   │   ├── tfnsw_client.py     # httpx wrapper, fixture fallback
 │   │   │   └── kml_loader.py       # parse Willoughby KML → ParkingSignRecord
@@ -451,7 +451,7 @@ Each plan must pass all its tests before the next plan begins.
 ## 13. Open questions
 
 1. **Penalty CSV granularity** — event-level (street + timestamp) or monthly aggregate by LGA? Determines whether `penalty_density` feature ships in Plan 3 or is dropped.
-2. **TfNSW historical data depth** — how many months of history are available via the API for Gordon and Lindfield? Less than 30 days may be insufficient for training; if so, the estimation model remains the prediction branch for all car parks through Plan 3 without an XGBoost upgrade.
+2. **TfNSW historical coverage** — new facilities need weeks of `/history` ingestion before contributing meaningful rows; the training gate enforces minimum hourly samples across the pooled frame.
 3. **KML geocoding coverage** — what fraction of Willoughby placemarks get a parseable street name after geocoding? If <50%, the seed file needs expansion beyond Victoria Avenue before Plan 4 launches.
 
 ---
@@ -462,8 +462,8 @@ ParkSmart shows two kinds of data to users. This must be communicated consistent
 
 | Data type | Source | User-facing label |
 |---|---|---|
-| Live occupancy | TfNSW sensor (Gordon, Lindfield) | "Live" (green badge) |
-| Estimated occupancy | Pattern model (5 CBD car parks) | "Estimated" (grey badge) |
+| Live occupancy | TfNSW sensors (Park&Ride sites seeded in DB) | "Live" (green badge when `source=tfnsw`) |
+| Estimated occupancy | Pattern model (`sim_*` CBD / retail garages) | "Estimated" (grey badge) |
 | ML prediction (TfNSW parks) | XGBoost trained on real history | "Predicted · X% confidence" |
 | Estimation-based prediction | Pattern model at future timestamp | "Estimated · typical patterns" |
 | Zone restrictions | Willoughby KML + curated seed | "Source: Willoughby Council" |

@@ -1,6 +1,8 @@
 """
-TfNSW history collection — backfills real Gordon + Lindfield occupancy into the
-occupancy_history table so the XGBoost model has training data.
+TfNSW history collection — backfills occupancy into `occupancy_history` for every
+seeded TfNSW facility (see `app.data.seed_car_parks.TFNSW_CAR_PARKS`).
+
+Training consumes site-agnostic features across **all** seeded car parks that have rows.
 
 Run:  python -m app.ml.collect_history --days 120
 Requires TFNSW_API_KEY in .env to fetch real data. Without a key the underlying
